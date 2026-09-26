@@ -10,7 +10,7 @@ from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent_duty as ad  # noqa: E402
 
-EMPTY = "valami kimenet\n─────\n❯ \n─────\n  ⏵⏵ auto mode on\n"
+EMPTY = "some output\n─────\n❯ \n─────\n  ⏵⏵ auto mode on\n"
 BUSY = "working\n─────\n❯ \n─────\n  ⏵⏵ auto mode on · esc to interrupt\n"
 STUCK_OWN = "done\n─────\n❯ Agent WAKE on the bus: feladat-1 (you are working now)\n─────\n  ⏵⏵ auto mode on\n"
 FOREIGN = "done\n─────\n❯ another agent is typing something\n─────\n  ⏵⏵ auto mode on\n"
@@ -227,7 +227,7 @@ class JointReviewPR3(unittest.TestCase):
         # a `touch`ed file or one containing `{}` used to count as "reported", and that produced the supervisor's
         # "reported and idle — the next one may go". From now on the file must be a row of the bus JSON mirror,
         # sent BY THE AGENT (`from == agent`). The probe's LOGIC (old/new mtime) is unchanged.
-        row = '{"from": "agentx", "to": "operator", "kind": "msg", "note": "jelentes"}'
+        row = '{"from": "agentx", "to": "operator", "kind": "msg", "note": "report"}'
         old = os.path.join(inbox, "agentx_1_regi.json"); open(old, "w").write(row)
         os.utime(old, (T0 - 100, T0 - 100))
         new = os.path.join(inbox, "agentx_2_uj.json"); open(new, "w").write(row)
@@ -239,7 +239,7 @@ class JointReviewPR4Duty(unittest.TestCase):
     """the SHELLS pattern only on the status line, and 0 shells is not work."""
 
     def test_M3_message_text_cannot_silence_watchdog(self):
-        pane = "─────\n❯ \n[msg-7 mallory→te x/msg] 5 shells futnak\n  ⏵⏵ auto mode on\n"
+        pane = "─────\n❯ \n[msg-7 mallory→te x/msg] 5 shells running\n  ⏵⏵ auto mode on\n"
         a, _ = d({"idle_since": T0 - 3600}, pane, now=T0)
         self.assertNotEqual(a, "none")
 

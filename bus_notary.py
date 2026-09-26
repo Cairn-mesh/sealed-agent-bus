@@ -1417,7 +1417,7 @@ def main(argv=None) -> int:
             if args.pub and is_product():                       # round closing in product mode regardless of its size
                 print("bus_notary verify: product mode — refused: " + msg, file=sys.stderr)
                 return 3
-            print("bus_notary verify: FIGYELEM — " + msg, file=sys.stderr)
+            print("bus_notary verify: WARNING — " + msg, file=sys.stderr)
         if rep["ack_target_violations"]:
             print("bus_notary verify: %d ack entr(y/ies) with a cursor target greater than max(starting cursor, ack) — the honest "
                   "clamp cannot write this (false cursor target, swallowed mail)" % len(rep["ack_target_violations"]), file=sys.stderr)
@@ -1484,9 +1484,9 @@ def main(argv=None) -> int:
                        "does not show in it. Full chain: `agent_bus.py audit-export --agent <agent>` (--from-seq 0), "
                        "or give the --bus-audit-anchor <row_hash> value." % chk.get("slice_start_seq"))
                 if bool(args.strict or is_product()):
-                    print("bus_notary reconcile: MEGTAGADVA — " + msg, file=sys.stderr)
+                    print("bus_notary reconcile: REFUSED — " + msg, file=sys.stderr)
                     return 1
-                print("bus_notary reconcile: FIGYELEM — " + msg, file=sys.stderr)
+                print("bus_notary reconcile: WARNING — " + msg, file=sys.stderr)
         strict = bool(args.strict or is_product())
         entries = read_lines(args.file)                    # 8/4: we read ONCE (a file swapped between two
         rep = reconcile(entries, args.identity, rcpts, start_cursor=args.start_cursor, trusted_pub=args.pub,

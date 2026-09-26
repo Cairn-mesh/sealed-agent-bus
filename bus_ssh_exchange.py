@@ -197,7 +197,7 @@ def _exchange(identity, raw, *, db, attach_root, notary):
         sha = desc.get("sha256") if isinstance(desc, dict) else None
         env = desc if isinstance(desc, dict) else {}
         try:
-            bus_attach.check_descriptor(desc)                  # tisztan alaki
+            bus_attach.check_descriptor(desc)                  # purely structural
         except (bus_attach.AttachmentError, AttributeError, TypeError) as e:
             out["fetched"].append({"sha256": sha, "status": "rejected", "reason": str(e)[:200]})
             note(envelope=env, recipient=identity, kind="fetch", decision="rejected", reason=str(e)[:200])

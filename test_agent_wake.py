@@ -49,7 +49,7 @@ class Env(unittest.TestCase):
 
 class PromptState(unittest.TestCase):
     def test_empty_prompt(self):
-        self.assertEqual(aw.prompt_input_state("valami kimenet\n❯ \n"), "empty")
+        self.assertEqual(aw.prompt_input_state("some output\n❯ \n"), "empty")
 
     def test_typed_text_is_typed(self):
         self.assertEqual(aw.prompt_input_state("❯ continue the measurement"), "typed")

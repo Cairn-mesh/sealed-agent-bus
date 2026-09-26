@@ -72,7 +72,6 @@ FILE_VECTORS = {
 VERBATIM_FILES = (
     "test_joint_ack_ablak_20260916.py",
     "test_joint_ack_cover_tiers.py",
-    "test_joint_audit_anchor_20260916.py",
     "test_joint_claimed_ack_cover.py",
     "test_joint_clamp_optout.py",
     "test_joint_cursor_skips_undelivered.py",
@@ -89,7 +88,6 @@ VERBATIM_FILES = (
     "test_joint_silent_lifeboat_20260916.py",
     "test_joint_singleflight_20260916.py",
     "test_joint_strict_ack_anchor_20260916.py",
-    "test_joint_transient_reject.py",
     "test_joint_verify_cursor_field_blind.py",
     "test_joint_wake_parent_20260916.py",
     "test_peer_notary_failopen.py",

@@ -68,6 +68,9 @@ The install root is given by `AGENT_BRIDGE_DIR` (default `~/.agentbus`).
 - **Schema (frozen contract):** [`docs/AGENT_BUS_SCHEMA.md`](docs/AGENT_BUS_SCHEMA.md)
 - **Changelog:** [`CHANGELOG.md`](CHANGELOG.md)
 
+> The internal development log (design notes, attack matrix, live measurements) is kept privately and is
+> not part of this public repository.
+
 ## Licence
 
 **Source-available** under the [Business Source License 1.1](LICENSE). You may download, read, audit,

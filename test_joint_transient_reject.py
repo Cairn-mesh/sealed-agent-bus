@@ -1,25 +1,25 @@
-"""(2026-09-16, ) — a `6115966` "kiadható prefix" vízszintjének támadása.
+"""(2026-09-16) — attack on the "releasable prefix" watermark of `6115966`.
 
-A BLOCKER-re a javítás az ÉN javaslatom volt: a `mark_delivered` vízszintje a KIADHATÓ
-(a `recv` szűrőjén átmenő) és még olvasatlan sorok közül veszi az első id-t. A javaslatom
-indoklásában EGY esetre hivatkoztam: a `stale-ts` — ami VÉGLEGES (a 7 napos ablak már sosem nyílik
-ki újra). A javítás viszont NEM tesz különbséget végleges és ÁTMENETI elutasítás között.
+The fix for the BLOCKER was MY proposal: the `mark_delivered` watermark takes the first id from the
+RELEASABLE (passing the `recv` filter) and still-unread rows. In the rationale for my proposal I referred
+to ONE case: `stale-ts` — which is FINAL (the 7-day window never reopens). The fix, however, does NOT
+distinguish between final and TRANSIENT rejection.
 
-Átmeneti elutasítás a `bus_enforce.check` szerint legalább kettő van:
-  - `future-ts`  — a feladó órája előre jár; a `WINDOW_FUTURE_S` (300 s) letelte után a sor
-                   MAGÁTÓL legitimmé válik. Nincs benne semmi ellenséges: óracsúszás.
-  - `forged`     — ismeretlen sender: a registry-kulcs (root-tulajdonú) még nincs bejegyezve;
-                   a kulcs-rollout befejeztével a sor legitimmé válik.
+According to `bus_enforce.check` there are at least two transient rejections:
+  - `future-ts`  — the sender's clock runs ahead; after `WINDOW_FUTURE_S` (300 s) elapses the row becomes
+                   legitimate ON ITS OWN. There is nothing hostile in it: clock skew.
+  - `forged`     — unknown sender: the registry key (root-owned) is not registered yet; once the key
+                   rollout completes the row becomes legitimate.
 
-Ez a szonda a `future-ts`-t méri, mert az MAGÁTÓL oldódik fel, tehát nem kell hozzá operátori
-beavatkozást feltételezni.
+This probe measures `future-ts`, because it resolves ON ITS OWN, so it needs no assumed operator
+intervention.
 
-A mért lánc (a VALÓDI kiadási út, `bus_ssh_exchange.py:161-196`):
-  peek -> mark_delivered -> ack_preview -> ack, `AGENT_BUS_STRICT_ACK=1` + termék-mód.
-A kérdés nem az, hogy a kurzor mozdul-e (mozdulnia KELL — ezt kértem), hanem hogy az átmenetileg
-kiadhatatlan sor a kurzor ALÁ kerül-e, és ha igen, van-e még út, amin kimegy.
+The measured chain (the REAL release path, `bus_ssh_exchange.py:161-196`):
+  peek -> mark_delivered -> ack_preview -> ack, `AGENT_BUS_STRICT_ACK=1` + product mode.
+The question is not whether the cursor moves (it MUST move — that is what I asked for), but whether the
+transiently unreleasable row ends up BELOW the cursor, and if so, whether there is still a path out.
 
-stdlib unittest + cryptography. Hálózat nincs, minden út /tmp alá.
+stdlib unittest + cryptography. No network, every path under /tmp.
 """
 import os
 import sys
@@ -33,11 +33,11 @@ sys.path.insert(0, HERE)
 import agent_bus as ab  # noqa: E402
 import bus_enforce as enf  # noqa: E402
 
-SKEW_S = 400          # > WINDOW_FUTURE_S (300) -> future-ts, de 400 s múlva MAGÁTÓL legitim
+SKEW_S = 400          # > WINDOW_FUTURE_S (300) -> future-ts, but legitimate ON ITS OWN after 400 s
 
 
-@unittest.skipUnless(ab._A2_HAVE, "cryptography szükséges")
-@unittest.skipUnless(hasattr(ab, "mark_delivered"), "mark_delivered (52ad412+) szükséges")
+@unittest.skipUnless(ab._A2_HAVE, "cryptography required")
+@unittest.skipUnless(hasattr(ab, "mark_delivered"), "mark_delivered (52ad412+) required")
 class TransientRejectLoss(unittest.TestCase):
     def setUp(self):
         from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -61,7 +61,7 @@ class TransientRejectLoss(unittest.TestCase):
                 "AGENT_WAKE_DIR": os.path.join(t, "wake"), "AGENT_BUS_ENFORCE_DIR": os.path.join(t, "enf"),
                 "AGENT_BUS_MODE": "product"}, clear=False),
             mock.patch.object(ab, "KEYS_DIR", self.keys),
-            # a registry-guard root-tulajdont ellenőriz; a determinizmushoz kikerüljük (nem ezt mérjük)
+            # the registry guard checks root ownership; for determinism we bypass it (that is not what we measure)
             mock.patch.object(ab, "_a2_guarded_read",
                               lambda p: (open(p, encoding="utf-8").read().strip() if os.path.exists(p) else None)),
         ]
@@ -75,13 +75,13 @@ class TransientRejectLoss(unittest.TestCase):
         self.tmp.cleanup()
 
     def send_future(self):
-        """Egy LEGITIM, aláírt üzenet előre járó órájú feladótól -> most future-ts, 400 s múlva rendben."""
+        """A LEGITIMATE, signed message from a sender whose clock runs ahead -> future-ts now, fine after 400 s."""
         fut = int((time.time() + SKEW_S) * 1e9)
         with mock.patch.object(ab.time, "time_ns", lambda: fut):
-            ab.send("hub", "peer", "ora-elore-de-legitim", db=self.db, mirror=False, sign_key=self.kp)
+            ab.send("hub", "peer", "clock-ahead-but-legit", db=self.db, mirror=False, sign_key=self.kp)
 
     def send_fresh(self, tag):
-        ab.send("hub", "peer", "friss-%s" % tag, db=self.db, mirror=False, sign_key=self.kp)
+        ab.send("hub", "peer", "fresh-%s" % tag, db=self.db, mirror=False, sign_key=self.kp)
 
     def cursors(self):
         c = ab._conn(self.db)
@@ -92,7 +92,7 @@ class TransientRejectLoss(unittest.TestCase):
             c.close()
 
     def one_round(self, *, strict):
-        """A valódi kiadási út magja: peek -> mark_delivered -> ack (strict clamp)."""
+        """The core of the real release path: peek -> mark_delivered -> ack (strict clamp)."""
         rows = ab.recv("peer", mark=False, limit=200, db=self.db, verify_sds=True)
         ids = [r["id"] for r in rows]
         if ids:
@@ -105,72 +105,72 @@ class TransientRejectLoss(unittest.TestCase):
         return ids
 
     def after_skew(self):
-        """A jövő-ablak letelt: a `future-ts` ok MEGSZŰNT. Mit lát még a busz?"""
+        """The future window has elapsed: the `future-ts` reason is GONE. What does the bus still see?"""
         later = time.time() + SKEW_S + 10
         with mock.patch.object(enf.time, "time", lambda: later):
             reach = [r["id"] for r in ab.recv("peer", mark=False, limit=99, db=self.db, verify_sds=True)]
             life = [m["id"] for m in ab.reconcile("peer", db=self.db)]
         return reach, life
 
-    # ── kontroll: az előfeltétel fennáll, és ÁTMENETI (nem végleges) ──────────
+    # -- control: the precondition holds, and it is TRANSIENT (not final) --------
     def test_control_future_ts_is_rejected_now_and_valid_later(self):
         self.send_future()
         self.assertEqual(enf.mode(db=self.db), "product")
         now_ids = [r["id"] for r in ab.recv("peer", mark=False, limit=99, db=self.db, verify_sds=True)]
-        self.assertEqual(now_ids, [], "most future-ts -> nem kiadható")
+        self.assertEqual(now_ids, [], "future-ts now -> not releasable")
         later = time.time() + SKEW_S + 10
         with mock.patch.object(enf.time, "time", lambda: later):
             later_ids = [r["id"] for r in ab.recv("peer", mark=False, limit=99, db=self.db, verify_sds=True)]
-        self.assertEqual(later_ids, [1], "a jövő-ablak letelte után UGYANAZ a sor legitim (ÁTMENETI elutasítás)")
+        self.assertEqual(later_ids, [1], "after the future window elapses the SAME row is legitimate (TRANSIENT rejection)")
 
-    # ── kontroll: átmeneti sor NÉLKÜL a becsületes postafiók halad ────────────
+    # -- control: WITHOUT a transient row the honest mailbox advances ------------
     def test_control_honest_mailbox_advances(self):
         self.send_fresh("a")
         self.assertEqual(self.one_round(strict=True), [1])
-        self.assertEqual(self.cursors(), (1, 1), "a becsületes kör kurzora és vízszintje is 1")
+        self.assertEqual(self.cursors(), (1, 1), "the honest round's cursor and watermark are both 1")
 
-    # ── LELET: az átmenetileg kiadhatatlan sor a kurzor ALÁ kerül ────────────
+    # -- FINDING: the transiently unreleasable row ends up BELOW the cursor ------
     def test_transient_reject_must_not_be_skipped_by_the_cursor(self):
         self.send_future()
         self.send_fresh("a")
         given = self.one_round(strict=True)
-        self.assertEqual(given, [2], "csak a friss sor adható ki")
+        self.assertEqual(given, [2], "only the fresh row can be released")
         cur, dl = self.cursors()
         self.assertLess(cur, 1,
-                        "a kurzor %d-re ugrott, a vízszint %d: az ÁTMENETILEG elutasított id=1 a kurzor ALÁ került, "
-                        "pedig 400 s múlva legitim lett volna" % (cur, dl))
+                        "the cursor jumped to %d, the watermark is %d: the TRANSIENTLY rejected id=1 ended up BELOW "
+                        "the cursor, even though after 400 s it would have been legitimate" % (cur, dl))
 
-    # ── LELET: a kurzor-ugrás után a sor a `recv` úton NEM érhető el ─────────
+    # -- FINDING: after the cursor jump the row is NOT reachable on the `recv` path -----
     def test_transient_reject_must_stay_reachable_after_the_window(self):
         self.send_future()
         self.send_fresh("a")
         self.one_round(strict=True)
         reach, life = self.after_skew()
         self.assertIn(1, reach,
-                      "a jövő-ablak letelte után a legitim id=1 a recv úton nem jön ki (reach=%s); "
-                      "a mentőöv %s-t listáz" % (reach, life))
+                      "after the future window elapses the legitimate id=1 does not come out on the recv path (reach=%s); "
+                      "the lifeboat lists %s" % (reach, life))
 
-    # ── ATTRIBÚCIÓ-kontroll: a replay termék-módú halottsága NEM ebből a diffből jön ──
-    # Ugyanaz a kérdés a 6115966 új kódútja NÉLKÜL: kézi (nem-strict) kurzor-ugrás kihagy egy
-    # kézbesítetlen sort, a mentőöv látja -> kijut-e a replay? Ez az ALAPON is futtatható.
+    # -- ATTRIBUTION control: the product-mode deadness of replay does NOT come from this diff --
+    # The same question WITHOUT the new code path of 6115966: a manual (non-strict) cursor jump skips an
+    # undelivered row, the lifeboat sees it -> does the replay get out? This is runnable on the BASELINE too.
     def test_control_replay_is_dead_in_product_mode_on_both_trees(self):
         self.send_fresh("a")
         self.send_fresh("b")
-        # 2026-09-16: a strict ack clamp TERMÉK-MÓDBAN ALAPÉRTELMEZÉS
-        # lett (az üzemeltető „igen mehet" + a ti mért véleményetek). Ez a kontroll a RÉGI default kár-forgatókönyvét
-        # állítja elő, ezért a menekülő ajtót itt ki kell mondani — a ti mondatotok szerint: „a fixture-ben, nem a
-        # termék-kódban van munka". A szonda LOGIKÁJA változatlan.
+        # 2026-09-16: the strict ack clamp became the DEFAULT IN PRODUCT MODE
+        # (the operator's "yes go ahead" + your measured opinion). This control reproduces the OLD default's damage
+        # scenario, so the escape door must be stated here -- in your words: "the work is in the fixture, not in the
+        # product code". The probe's LOGIC is unchanged.
         with mock.patch.dict(os.environ, {"AGENT_BUS_STRICT_ACK": "0"}, clear=False):
-            ab.ack("peer", 2, db=self.db)             # nem-strict: a kurzor kézbesítés NÉLKÜL ugrik 0->2
+            ab.ack("peer", 2, db=self.db)             # non-strict: the cursor jumps 0->2 WITHOUT delivery
         life = [m["id"] for m in ab.reconcile("peer", db=self.db)]
-        self.assertEqual(life, [1, 2], "előfeltétel: a mentőöv a két kézbesítetlen sort látja")
+        self.assertEqual(life, [1, 2], "precondition: the lifeboat sees the two undelivered rows")
         done = ab.replay("peer", commit=True, db=self.db)
         reach = ab.recv("peer", mark=False, limit=99, db=self.db, verify_sds=True)
         self.assertTrue(reach,
-                        "a replay lefutott (%s), de a termék-módú recv semmit nem ad ki: a `system` feladós, "
-                        "ALÁÍRATLAN replay-üzenetet a kikényszerítés `unsigned-downgrade`-del eldobja" % (done,))
+                        "the replay ran (%s), but the product-mode recv releases nothing: enforcement drops the "
+                        "`system`-sender, UNSIGNED replay message with `unsigned-downgrade`" % (done,))
 
-    # ── LELET: a mentőöv MEGNEVEZI a sort, de a replay termék-módban nem jut ki ──
+    # -- FINDING: the lifeboat NAMES the row, but the replay does not get out in product mode --
     def test_lifeboat_replay_must_actually_deliver(self):
         self.send_future()
         self.send_fresh("a")
@@ -178,34 +178,34 @@ class TransientRejectLoss(unittest.TestCase):
         later = time.time() + SKEW_S + 10
         with mock.patch.object(enf.time, "time", lambda: later):
             life = [m["id"] for m in ab.reconcile("peer", db=self.db)]
-            self.assertEqual(life, [1], "előfeltétel: a mentőöv megnevezi az elveszett sort")
+            self.assertEqual(life, [1], "precondition: the lifeboat names the lost row")
             done = ab.replay("peer", commit=True, db=self.db)
             reach = ab.recv("peer", mark=False, limit=99, db=self.db, verify_sds=True)
         self.assertTrue(reach,
-                        "a mentőöv %s-t nevezte meg, a replay lefutott (%s), de a termék-módú recv "
-                        "SEMMIT nem ad ki: a helyreállítási út nem jut át a kikényszerítésen" % (life, done))
+                        "the lifeboat named %s, the replay ran (%s), but the product-mode recv releases "
+                        "NOTHING: the recovery path does not pass enforcement" % (life, done))
 
-    # ── LELET: a peek-kori audit-sor ÖRÖKRE vádol, a SIKERES kézbesítés után is ──
-    # A -em pontosan a HAMIS VÁD ellen szólt. A javítás a mentőöv `extra` ágából
-    # kivette a `read_at IS NULL` szűrőt ("az audit-sor a jel"), de az audit-sor a PEEK-kor íródik,
-    # amikor az elutasítás még fennállt. Ha az ok ÁTMENETI volt és a sor később rendben kimegy,
-    # a vád megmarad -> a replay DUPLIKÁLNA egy már kézbesített üzenetet.
+    # -- FINDING: the peek-time audit row accuses FOREVER, even after SUCCESSFUL delivery --
+    # My complaint was precisely against the FALSE ACCUSATION. The fix removed the `read_at IS NULL` filter
+    # from the lifeboat's `extra` branch ("the audit row is the signal"), but the audit row is written AT PEEK,
+    # while the rejection still held. If the reason was TRANSIENT and the row later goes out fine,
+    # the accusation persists -> the replay would DUPLICATE an already-delivered message.
     def test_delivered_row_must_leave_the_lifeboat(self):
         self.send_future()
         self.send_fresh("a")
         peek = [r["id"] for r in ab.recv("peer", mark=False, limit=99, db=self.db, verify_sds=True)]
-        self.assertEqual(peek, [2], "előfeltétel: a peek elutasítja az id=1-et (audit-sor íródik)")
+        self.assertEqual(peek, [2], "precondition: the peek rejects id=1 (audit row is written)")
         later = time.time() + SKEW_S + 10
         with mock.patch.object(enf.time, "time", lambda: later):
-            given = self.one_round(strict=True)          # a jövő-ablak letelt: MINDEN sor kimegy
-            self.assertEqual(given, [1, 2], "előfeltétel: a sor most bizonyítottan KIADÁSRA került")
+            given = self.one_round(strict=True)          # the future window has elapsed: EVERY row goes out
+            self.assertEqual(given, [1, 2], "precondition: the row is now provably RELEASED")
             life = [m["id"] for m in ab.reconcile("peer", db=self.db)]
             would = ab.replay("peer", commit=False, db=self.db)["would_replay"]
         self.assertEqual(life, [],
-                         "a mentőöv a SIKERESEN kézbesített id=1-et még vádolja (life=%s); a replay "
-                         "duplikálná: %s" % (life, would))
+                         "the lifeboat still accuses the SUCCESSFULLY delivered id=1 (life=%s); the replay "
+                         "would duplicate: %s" % (life, would))
 
-    # ── a MÁSODIK átmeneti ok: kulcs-rollout (`forged`), operátori beavatkozással ──
+    # -- the SECOND transient reason: key rollout (`forged`), with operator intervention --
     def test_key_rollout_reject_must_not_be_skipped_by_the_cursor(self):
         from cryptography.hazmat.primitives.asymmetric import ed25519
         from cryptography.hazmat.primitives import serialization
@@ -214,19 +214,19 @@ class TransientRejectLoss(unittest.TestCase):
         kp = os.path.join(self.keys, "ops.ed25519.key")
         with open(kp, "w") as f:
             f.write(priv.private_bytes_raw().hex())
-        # a registry-bejegyzés MÉG NINCS meg (a kulcs-tár root-tulajdonú, az operátor írja)
-        ab.send("ops", "peer", "legitim-de-meg-nem-bejegyzett-kulcs", db=self.db, mirror=False, sign_key=kp)
+        # the registry entry is NOT there yet (the key store is root-owned, the operator writes it)
+        ab.send("ops", "peer", "legit-but-not-yet-registered-key", db=self.db, mirror=False, sign_key=kp)
         self.send_fresh("a")
         peek = [r["id"] for r in ab.recv("peer", mark=False, limit=99, db=self.db, verify_sds=True)]
-        self.assertEqual(peek, [2], "előfeltétel: bejegyzés nélkül a sor `forged` -> nem kiadható")
+        self.assertEqual(peek, [2], "precondition: without the entry the row is `forged` -> not releasable")
         self.one_round(strict=True)
-        with open(os.path.join(self.keys, "ops.pub"), "w") as f:   # az operátor BEJEGYZI a kulcsot
+        with open(os.path.join(self.keys, "ops.pub"), "w") as f:   # the operator REGISTERS the key
             f.write(pub)
         reach = [r["id"] for r in ab.recv("peer", mark=False, limit=99, db=self.db, verify_sds=True)]
         self.assertIn(1, reach,
-                      "a kulcs bejegyzése után a legitim id=1 nem jön ki (reach=%s): a kurzor már fölötte van" % reach)
+                      "after registering the key the legitimate id=1 does not come out (reach=%s): the cursor is already above it" % reach)
 
-    # ── MÉRÉS (nem assert): mi marad a mentőövön? ────────────────────────────
+    # -- MEASUREMENT (not an assert): what stays on the lifeboat? ----------------
     def test_report_lifeboat_state(self):
         self.send_future()
         self.send_fresh("a")
@@ -240,7 +240,7 @@ class TransientRejectLoss(unittest.TestCase):
             unread = [r[0] for r in c.execute("SELECT id FROM messages WHERE recipient='peer' AND read_at IS NULL")]
         finally:
             c.close()
-        sys.stderr.write("\n[MÉRÉS] kurzor=%d vízszint=%d recv_után=%s mentőöv=%s olvasatlan=%s audit=%s\n"
+        sys.stderr.write("\n[MEASUREMENT] cursor=%d watermark=%d after_recv=%s lifeboat=%s unread=%s audit=%s\n"
                          % (cur, dl, reach, life, unread, aud))
 
 

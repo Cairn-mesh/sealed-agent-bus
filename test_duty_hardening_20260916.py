@@ -50,7 +50,7 @@ class DutyHardening(unittest.TestCase):
     # ── control: a real mirror row is a report ───────────────────────────────
     def test_control_real_mirror_row_counts(self):
         self._report("agentx_1.json", json.dumps({"from": "agentx", "to": "operator", "kind": "msg",
-                                                  "note": "kesz a meres"}))
+                                                  "note": "measurement done"}))
         self.assertEqual(self.count(), 1)
 
     # ── 1: a bare file name is not a report ────────────────────────────────────

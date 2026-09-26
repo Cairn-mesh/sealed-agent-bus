@@ -532,7 +532,7 @@ class NotaryIntegrationTest(unittest.TestCase):
             code, _ = relay.deliver({"v": 1, "from": "alice", "to": "nobody"})
             self.assertEqual(code, 400)
             self.assertEqual([m["body"] for m in bob.pickup()], ["RELAY-PLAINTEXT"])
-            bad = br.sign_request("pickup", "bob", a_sign)                        # rossz kulccsal
+            bad = br.sign_request("pickup", "bob", a_sign)                        # with the wrong key
             import urllib.request
             import urllib.error
             req = urllib.request.Request(relay.url + "/pickup", data=json.dumps(bad).encode(), method="POST",

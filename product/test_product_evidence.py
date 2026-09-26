@@ -109,7 +109,7 @@ class ShippedEnvelope(unittest.TestCase):
         by = {c["chapter"]: c["status"] for c in rep["chapters"]}
         self.assertEqual(by["1. integrity"], "OK", rep["chapters"][0])
         self.assertIn(by["2. the notary chain bites"], ("OK", "SKIP"))
-        self.assertEqual(by["4. independent arms"], "PENDING")     # a PENDING sosem OK
+        self.assertEqual(by["4. independent arms"], "PENDING")     # PENDING is never OK
         self.assertEqual(p.returncode, 0)
 
     def test_a_modified_shipped_file_fails_chapter_one(self):

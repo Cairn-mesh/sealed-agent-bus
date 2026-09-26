@@ -102,7 +102,7 @@ class EnrollHardening(unittest.TestCase):
 
     # ── 4: REFUTED — shell injection into command= ─────────────────────────
     def test_shell_metacharacters_cannot_enter(self):
-        for ident in ("peer; rm -rf /", 'peer" ', "peer$(id)", "../peer", "peer\nmasik"):
+        for ident in ("peer; rm -rf /", 'peer" ', "peer$(id)", "../peer", "peer\nother"):
             with self.subTest(i=ident):
                 with self.assertRaises(ValueError):
                     en.enroll_line(ident, ed25519_key(), CMD)

@@ -175,7 +175,7 @@ class SessionLockLiveness(unittest.TestCase):
         self.assertEqual(st, "acquired")
         self.assertTrue(lock._holder_alive(lock.holder(), time.time_ns()))
         owner.kill(); owner.wait()                                               # kill -9
-        self.assertFalse(lock._holder_alive(lock.holder(), time.time_ns()))      # guard: tiszta
+        self.assertFalse(lock._holder_alive(lock.holder(), time.time_ns()))      # guard: clean
         heir = subprocess.Popen(["sleep", "120"])
         try:
             st2, h = sf.SessionLock("tmuxtest", bridge=self.tmp.name, target_alive=lambda t: True).acquire(
