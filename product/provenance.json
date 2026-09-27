@@ -1,11 +1,11 @@
 {
  "counts": {
-  "first-party": 120,
+  "first-party": 114,
   "generated-here": 15,
   "joint-review-line": 22,
   "partner-same-business": 5,
   "third-party": 0,
-  "total": 162
+  "total": 156
  },
  "files": {
   ".github/workflows/tests.yml": "first-party",
@@ -31,13 +31,6 @@
   "docs/AGENT_BUS_DESIGN.md": "first-party",
   "docs/AGENT_BUS_SCHEMA.md": "first-party",
   "docs/PROTOCOL_SLEEP_SAFE_MODE.md": "first-party",
-  "docs/internal-hu/FEJLESZTES_v1.1.md": "first-party",
-  "docs/internal-hu/FEJLESZTES_v1.2.md": "first-party",
-  "docs/internal-hu/FEJLESZTES_v1.4.md": "first-party",
-  "docs/internal-hu/FEJLESZTES_v1.5.md": "first-party",
-  "docs/internal-hu/MERES_ketgepes_elo_20260916.md": "first-party",
-  "docs/internal-hu/README.md": "first-party",
-  "docs/internal-hu/TAMADASI_MATRIX_v1.5.md": "first-party",
   "docs_bind_probe.py": "first-party",
   "product/COMMERCIAL.md": "first-party",
   "product/EVIDENCE_ENVELOPE.md": "first-party",
@@ -162,6 +155,7 @@
   "test_ssh_outbound_notary.py": "first-party",
   "test_ssh_sender_namespace_20260917.py": "first-party",
   "test_wake_markers_20260916.py": "first-party",
+  "tools/english_exceptions.json": "first-party",
   "tools/english_gate.py": "first-party",
   "tools/inbox_watch.sh": "first-party",
   "tools/inbox_watch_filtered_example.sh": "first-party",

@@ -71,7 +71,7 @@ def _unb64(s: str) -> bytes:
     return base64.b64decode(s.encode(), validate=True)
 
 
-# ── kulcsok ──────────────────────────────────────────────────────────────────
+# ── keys ─────────────────────────────────────────────────────────────────────
 def x25519_keypair():
     """-> (private raw bytes, public base64). The private key stays on ITS OWN machine."""
     _need_crypto()
@@ -216,7 +216,7 @@ class _Auth:
         return agent
 
 
-# ── relay szerver ────────────────────────────────────────────────────────────
+# ── relay server ─────────────────────────────────────────────────────────────
 class Relay:
     def __init__(self, spool: str, registry: dict, host: str = "127.0.0.1", port: int = 0, window: int = WINDOW,
                  sse_interval: float = 0.5, nonce_path: str | None = None, notary=None):

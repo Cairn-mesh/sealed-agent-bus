@@ -1,0 +1,197 @@
+[
+  {
+    "path": "test_joint_ack_ablak_20260916.py",
+    "sha256": "2b156c821854a21cb86e21ed39cd6a8e61b1848826789b012db3804894db560d",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_ack_cover_tiers.py",
+    "sha256": "7783f13f1ff04ac1314a248a3e8d082a46dc617a5181da59e88943fe60b5e4ef",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_claimed_ack_cover.py",
+    "sha256": "824caea3defe843652b56f32357c50061293c6915dc40df45b181d78cbc71407",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_clamp_optout.py",
+    "sha256": "708210c1ba5d2bae8ff09e8b7336c0eab1eabf5966f7b660284e04a64f40532c",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_cursor_skips_undelivered.py",
+    "sha256": "e27ce8884731d85a84ed9885807fd45186c1c089a38141cea1984eb2e7dfea4f",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_delivered_highwater.py",
+    "sha256": "b66d00b06f8fa2c9104920073a2a50c5f24cdc32f29ab218c36eac3dd9be9aef",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_delivery_outcome.py",
+    "sha256": "584545b6fb50cb7dbc612329079861a8d4b52b4db76d686db3d255d446ccac74",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_downgrade_scope.py",
+    "sha256": "6b6bd25a6843e6e1ff6940123ae35402155bbce60fb65aaf7f4cf77c49d03c26",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_error_reply_outcome.py",
+    "sha256": "b55f4aa9301d3b9f7a484caa3ae7423ee655ffd8eb0938684f27153e4adf0d5c",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_kvantor_valalas_20260916.py",
+    "sha256": "96bb74bf1c9229c6fb016b2cf700317a00a9a8e232858e9feca50a6486441af4",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_notsent_ack_cover.py",
+    "sha256": "90cb19ef24953cfa14adf4417cd724e9af42bc05f830b70db1957f3ba4d929d5",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_otodik_fok_20260916.py",
+    "sha256": "fc38525179457dfaf3468d6da59e7b445154cec6e10993fdba2d20ce33050a51",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_pledge_optout_20260916.py",
+    "sha256": "069ee5c3f5cfa24f9de00cfcb10e07fe5ba160ec5a38b8be7f1ec77e69e228ab",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_prefix_stall.py",
+    "sha256": "0890a87119504e9812dbacf949ee37f7ea8ad9192a5dd885480f4449aa250c65",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_reason_optout.py",
+    "sha256": "fafb3fbd520c6d00f6bb772cb7158739220d8ff486a1b74470ac16332da7df78",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_silent_lifeboat_20260916.py",
+    "sha256": "710c7c7eee7a68e3e4f3bf8d6e3c1d4b45f7deab33bab4164b3656065d083193",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_singleflight_20260916.py",
+    "sha256": "479ca5620a7ce3d0ea8ffefaa752b878bd38e5dcb7ebdcfc798a1c21e8695e71",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_strict_ack_anchor_20260916.py",
+    "sha256": "f68acfa6518746abfd2fd6b42e8be4a11f8ded10a91ec503f7d58ce2433db979",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_verify_cursor_field_blind.py",
+    "sha256": "dc2785fa49ad4cc0ac01b2f9500955198cb41ffe60aebecac9fe3e28cbbead86",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_joint_wake_parent_20260916.py",
+    "sha256": "f3486cd415f0d74d9d59c3e88a4efb1644e53bb58e64ef61956c70a7dada4496",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_peer_notary_failopen.py",
+    "sha256": "0450afb9dfa55d1fbb8cee5d4cfad39d058de728587232a89457da7b564ccb24",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_peer_outbound_notary.py",
+    "sha256": "ffcffdd0dc3e3c731dafe4ad63144a97174af58a7bfa4a1dac26bb468e7d223e",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_peer_receipt_before_send.py",
+    "sha256": "09a334c877acdfa3d5bafed82ed96de39ae2b7cecc9f86afc92b29e3752704ce",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_peer_reconcile_ack_forgery.py",
+    "sha256": "70fecc678becbf0e1443f7907f10796c108fa528f42a57ce6420a358fa96f147",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "test_peer_reconcile_cursor_target.py",
+    "sha256": "47dbe5bf0c7f9a8c94f350c637c4c8e8a40df8fcd84f4ebba0e5a0900e45e01b",
+    "reason": "partner/joint-review test kept byte-identical -- external authorship is what makes it evidence (mirrors the repo's own tools/english_gate.py VERBATIM_FILES). Digest-pinned."
+  },
+  {
+    "path": "product/release_preflight.py",
+    "sha256": "49f08ae010ecbc1777b3fb7ec9f0db4a38a4afbc3d7740df4266f8bdc1371d55",
+    "reason": "byte-identical Hungarian TEST VECTORS / leak-scanner regex patterns / signed conformance vectors -- translating them would change test logic or a signed hash (mirrors tools/english_gate.py FILE_VECTORS). Digest-pinned."
+  },
+  {
+    "path": "docs_bind_probe.py",
+    "sha256": "740adc473e18d8f86e99ffca10c7ab63b09991ccbd21276b4ac12f7c59f36ddb",
+    "reason": "byte-identical Hungarian TEST VECTORS / leak-scanner regex patterns / signed conformance vectors -- translating them would change test logic or a signed hash (mirrors tools/english_gate.py FILE_VECTORS). Digest-pinned."
+  },
+  {
+    "path": "docs/AGENT_BUS_SCHEMA.md",
+    "sha256": "d454588621e800127586de3262888f4a711ec173213dfe308f3f5b922c6ba6b8",
+    "reason": "byte-identical Hungarian TEST VECTORS / leak-scanner regex patterns / signed conformance vectors -- translating them would change test logic or a signed hash (mirrors tools/english_gate.py FILE_VECTORS). Digest-pinned."
+  },
+  {
+    "path": "test_schema_doc_signed_shape.py",
+    "sha256": "14e4fc7239a2ce8145e0c9fed382d0fbb048f2260441b42fc2a8e0497e4898c3",
+    "reason": "byte-identical Hungarian TEST VECTORS / leak-scanner regex patterns / signed conformance vectors -- translating them would change test logic or a signed hash (mirrors tools/english_gate.py FILE_VECTORS). Digest-pinned."
+  },
+  {
+    "path": "test_signed_shape_interop.py",
+    "sha256": "4a6ba8fcac5069ff6290e75ae82bd4da22684e33399d96e93951becb2d564550",
+    "reason": "byte-identical Hungarian TEST VECTORS / leak-scanner regex patterns / signed conformance vectors -- translating them would change test logic or a signed hash (mirrors tools/english_gate.py FILE_VECTORS). Digest-pinned."
+  },
+  {
+    "path": "test_sds_validator_bypass_20260916.py",
+    "sha256": "6f8a96f2be37eee5ce195e61b0fcee719c632cda347057d846bdc1bc75186b81",
+    "reason": "byte-identical Hungarian TEST VECTORS / leak-scanner regex patterns / signed conformance vectors -- translating them would change test logic or a signed hash (mirrors tools/english_gate.py FILE_VECTORS). Digest-pinned."
+  },
+  {
+    "path": "test_agent_bus_security.py",
+    "sha256": "f50ea2407452adf2d01e631d425dc2f0745203c1fe048dface56c9449dda6a6b",
+    "reason": "byte-identical Hungarian TEST VECTORS / leak-scanner regex patterns / signed conformance vectors -- translating them would change test logic or a signed hash (mirrors tools/english_gate.py FILE_VECTORS). Digest-pinned."
+  },
+  {
+    "path": "agent_wake.py",
+    "sha256": "1c8f55ca27bb92c7f312971f23e3e54fdc72ccd156e0098806b86bb6a1dd6b4f",
+    "reason": "byte-identical Hungarian TEST VECTORS / leak-scanner regex patterns / signed conformance vectors -- translating them would change test logic or a signed hash (mirrors tools/english_gate.py FILE_VECTORS). Digest-pinned."
+  },
+  {
+    "path": "test_poke_hardening_20260916.py",
+    "sha256": "3f6590312dfbb1fda190fdd295f840c7438e270c5e2e0bbd9b2ec0b62ef9accd",
+    "reason": "byte-identical Hungarian TEST VECTORS / leak-scanner regex patterns / signed conformance vectors -- translating them would change test logic or a signed hash (mirrors tools/english_gate.py FILE_VECTORS). Digest-pinned."
+  },
+  {
+    "path": "product/test_product_packaging.py",
+    "sha256": "6c3e21c874d63a9807e4c4779bbfc6fefb1d73796803319c60d2c4f033189d96",
+    "reason": "byte-identical Hungarian TEST VECTORS / leak-scanner regex patterns / signed conformance vectors -- translating them would change test logic or a signed hash (mirrors tools/english_gate.py FILE_VECTORS). Digest-pinned."
+  },
+  {
+    "path": "tools/english_gate.py",
+    "sha256": "4ae20b7e530751328e2eeabd2611dff87377c5afd2317c533ba7f93261a5838c",
+    "reason": "The English-gate's OWN source: it must spell out the Hungarian stop-words and the FILE_VECTORS allowlist literals it detects/permits. Language data, not prose; english_gate.py exempts itself via SELF. Digest-pinned."
+  },
+  {
+    "path": "tools/inbox_watch_filtered_example.sh",
+    "sha256": "0df99087fe1a6cd131d8b21ab96b9857c12fdbc581bee7bae80c48921664341b",
+    "reason": "Detector regex patterns matching Hungarian alert keywords (kulcs-szivar / riasztas / szivarog / tele...). Language data -- translating would disable Hungarian-alert detection. Digest-pinned."
+  },
+  {
+    "path": "tools/pr_gomb/README.md",
+    "sha256": "f2881d70c2078531946df7451c62d138302b6e995693c953d19621bb8fa35357",
+    "reason": "Line 50 is a Python code sample; VALASZOK is the identifier for the valaszok.jsonl callback-reply file used throughout pr_gomb. Identifier, not prose. Digest-pinned."
+  },
+  {
+    "path": "tools/pr_gomb/crontab.example",
+    "sha256": "e31a276aba50f0783f8fc53deb9150ba1eb8e348550af869f8fe7470800b26be",
+    "reason": "English comments that mention the pr_gomb callback-reply file by its real name valaszok.jsonl; the filename is an identifier and cannot be renamed. Digest-pinned."
+  }
+]

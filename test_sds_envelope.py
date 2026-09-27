@@ -107,7 +107,7 @@ class Verify(unittest.TestCase):
         self.assertEqual(self.v(fr), ("invalid", "bad-signature"))
 
     def test_wrong_role_binding_invalid(self):
-        fr = make_framed([(self.k, self.pub, "root", "OrgA")])          # a beengedett role 'arm'
+        fr = make_framed([(self.k, self.pub, "root", "OrgA")])          # the admitted role is 'arm'
         self.assertEqual(self.v(fr), ("invalid", "bad-signature"))
 
     def test_not_admitted_sender(self):

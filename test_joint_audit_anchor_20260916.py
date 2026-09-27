@@ -1,22 +1,23 @@
-"""szonda (2026-09-16 dél) — a MÁSODIK NYILVÁNTARTÁS (`--bus-audit`) HORGONYTALAN.
+"""probe (2026-09-16 noon) — the SECOND REGISTER (`--bus-audit`) IS UNANCHORED.
 
-Az `af50521` óta a `verify` a napló-szelet farkát (`unverified_tail`), a `9838cf7` óta a szelet ELEJÉT
-(`slice_start_seq` / `anchored`) is megköveteli — mert egy belsőleg ép szelet önmagában nem állítás a
-teljes naplóról. A `d03d2eb` politikája pedig kimondja: strict/termék-módban a busz saját, hash-láncolt
-`cursor_audit` exportja NÉLKÜL nincs zöld lámpa (rc=1, „hiányos bizonyíték").
+Since `af50521` the `verify` requires the tail of the log slice (`unverified_tail`), and since `9838cf7`
+also the START of the slice (`slice_start_seq` / `anchored`) — because an internally sound slice is not by
+itself a statement about the whole log. And the `d03d2eb` policy states: in strict/product mode there is no
+green light WITHOUT the bus's own hash-chained `cursor_audit` export (rc=1, "incomplete evidence").
 
-Ez a fájl azt méri, hogy ugyanez a horgony-követelés a MÁSIK nyilvántartáson HIÁNYZIK:
-  * `agent_bus.audit_chain_verify` nem néz genezist és nem néz szelet-kezdetet (az EGY FÜGGVÉNNYEL
-    FELJEBB lévő, DB-beli `audit_verify` viszont `_GENESIS`-ből indul — a kettő nem ugyanazt követeli);
-  * a naplóba semmi nem köti a lánc fejét (`audit_head` a termék-kódban SEHOL nem hívódik);
-  * a `_audit_cross` nem ellenőrzi, hogy az export tényleg a vádlott agenté és hogy a kör ack-sorát
-    tartalmazza-e.
+This file measures that the same anchor requirement is MISSING on the OTHER register:
+  * `agent_bus.audit_chain_verify` looks at neither genesis nor slice start (whereas the DB-side
+    `audit_verify` ONE FUNCTION UP starts from `_GENESIS` — the two do not require the same thing);
+  * nothing in the log binds the head of the chain (`audit_head` is NEVER called in the product code);
+  * `_audit_cross` does not check that the export really belongs to the accused agent and that it
+    contains the round's ack row.
 
-Következmény (mérve): a vádlott nem hazudik és nem hamisít — csak RÖVIDEBB, belsőleg ép exportot ad át,
-és a `pending_down` hazugság `audit_skipped_contradicts_log` (hard, rc=1) helyett ZÖLDET (rc=0) kap.
+Consequence (measured): the accused does not lie and does not forge — it merely hands over a SHORTER,
+internally sound export, and the `pending_down` lie gets GREEN (rc=0) instead of
+`audit_skipped_contradicts_log` (hard, rc=1).
 
-A forgatókönyv szó szerint a gyártó saját `test_clamp_lied_with_audit_20260916.py`-jéé; az egyetlen
-különbség a `bus_audit=` bemenet alakja. stdlib unittest, hálózat nincs, minden út /tmp alá.
+The scenario is literally the producer's own `test_clamp_lied_with_audit_20260916.py`; the only
+difference is the shape of the `bus_audit=` input. stdlib unittest, no network, every path under /tmp.
 """
 import io
 import json
@@ -33,12 +34,12 @@ import agent_bus as ab  # noqa: E402
 import bus_notary as bn  # noqa: E402
 import bus_ssh_exchange as ex  # noqa: E402
 
-N_MAIL = 6          # ennyi üzenet vár
-N_GIVEN = 2         # ennyit ad ki a vádlott (4 elveszne)
+N_MAIL = 6          # this many messages waiting
+N_GIVEN = 2         # this many the accused releases (4 would be lost)
 
 
 class _Scenario(unittest.TestCase):
-    """A vádlott kiad 2-t a 6-ból, a kör-bejegyzésben letagadja a kihagyást (`pending_down`)."""
+    """The accused releases 2 of the 6 and, in the round entry, denies the skip (`pending_down`)."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(dir="/tmp", prefix="ab6-anchor-")
@@ -59,19 +60,19 @@ class _Scenario(unittest.TestCase):
         self.tmp.cleanup()
 
     def round(self, lie="pending_down", mail=N_MAIL, given=N_GIVEN, notary=None):
-        """Egy kör a VALÓDI kiadási úton; -> (kiadott sorok, ack cél)."""
+        """One round on the REAL release path; -> (released rows, ack target)."""
         n = notary or bn.Notary(self.log, seed=self.seed, checkpoint_every=1)
         rec = lambda **kw: n.record(sender_identity="peer", sender_auth="ssh-key", recipient="peer", **kw)
         for i in range(mail):
-            ab.send("hub", "peer", "titkos-%d" % i, db=self.db, mirror=False)
+            ab.send("hub", "peer", "secret-%d" % i, db=self.db, mirror=False)
         rows = ab.recv("peer", mark=False, limit=ex.MAX_REPLIES, db=self.db, verify_sds=True)
         allr = [{k: r.get(k) for k in ex._REPLY_KEYS if k in r} for r in rows]
-        out = allr[len(allr) - given:]                      # csak a LEGFELSŐ `given` darabot adja ki
+        out = allr[len(allr) - given:]                      # releases only the TOP `given` rows
         cur = ab.cursor_of("peer", db=self.db)
         gid = {x["id"] for x in out}
         left = [x["id"] for x in allr if x["id"] not in gid]
         c = {"at": cur, "replies": len(out), "pending": len(allr), "next_id": min(left) if left else 0}
-        if lie == "pending_down":                           # „nem is maradt kiadatlan"
+        if lie == "pending_down":                           # "nothing was left unreleased"
             c["pending"], c["next_id"] = len(out), 0
         rec(envelope={"identity": "peer", "cursor": cur, "reply_sha256": [bn.envelope_hash(x) for x in out]},
             kind="pickup", decision="accepted", reason="cursor=%d replies=%d" % (cur, len(out)), cursor=c)
@@ -101,65 +102,65 @@ class AuditSliceIsUnanchored(_Scenario):
         self.out, self.ack_to = self.round()
         self.audit = ab.audit_export("peer", db=self.db)
 
-    # ── KONTROLL 1: a TELJES exporttal a hazugság megbukik (a gyártó állítása, reprodukálva) ──
+    # -- CONTROL 1: with the FULL export the lie fails (the producer's claim, reproduced) --
     def test_control_full_export_contradicts_the_lie(self):
         v = self.verdict(self.audit)
         self.assertEqual(v["hard"], ["audit_skipped_contradicts_log"])
         self.assertFalse(v["ok"])
 
-    # ── KONTROLL 2: az előfeltétel — a kihagyást EGYETLEN sor (az ack) hordozza ──
+    # -- CONTROL 2: the precondition -- the skip is carried by a SINGLE row (the ack) --
     def test_control_the_evidence_sits_in_one_row(self):
         carry = [a for a in self.audit if int(a.get("skipped_undelivered") or 0)]
-        self.assertEqual(len(carry), 1, "a bizonyíték egyetlen sorban van: %s" % json.dumps(self.audit))
-        self.assertEqual(carry[0]["seq"], self.audit[-1]["seq"], "és ez a lánc UTOLSÓ sora")
+        self.assertEqual(len(carry), 1, "the evidence is in a single row: %s" % json.dumps(self.audit))
+        self.assertEqual(carry[0]["seq"], self.audit[-1]["seq"], "and this is the LAST row of the chain")
 
-    # ── LELET A: a farok-csonkolt export belsőleg ÉP, és elnémítja az összevetést ──
+    # -- FINDING A: the tail-truncated export is internally SOUND, and it silences the comparison --
     def test_tail_truncated_export_must_not_pass_as_evidence(self):
         v = self.verdict(self.audit[:-1])
-        self.assertTrue(v["chain_ok"], "előfeltétel: a csonkolt lánc önellenőrzésen ÁTMEGY (nincs hamisítás)")
-        self.assertNotEqual(v["hard"], [], "a rövidebb export némán tisztára mosta a hazug kört")
+        self.assertTrue(v["chain_ok"], "precondition: the truncated chain PASSES self-verification (no forgery)")
+        self.assertNotEqual(v["hard"], [], "the shorter export silently whitewashed the lying round")
 
-    # ── LELET B: a szelet ELEJE sincs horgonyozva (a DB-beli audit_verify viszont genezisből indul) ──
+    # -- FINDING B: the START of the slice is unanchored too (whereas the DB-side audit_verify starts from genesis) --
     def test_chain_verify_must_anchor_the_slice_start(self):
-        self.assertTrue(ab.audit_verify("peer", db=self.db)["ok"], "előfeltétel: a DB-lánc ép")
+        self.assertTrue(ab.audit_verify("peer", db=self.db)["ok"], "precondition: the DB chain is sound")
         chk = ab.audit_chain_verify(self.audit[1:])
-        self.assertFalse(chk["ok"], "a genezis nélkül induló szelet ÖNMAGÁBAN nem lehet 'ok' (vö. audit_verify)")
+        self.assertFalse(chk["ok"], "a slice starting without genesis cannot be 'ok' BY ITSELF (cf. audit_verify)")
 
-    # ── LELET C: a `from_seq` a TÁMOGATOTT API — egy hívással eltüntethető a régi kör bizonyítéka ──
+    # -- FINDING C: `from_seq` is the SUPPORTED API -- one call can erase the evidence of an older round --
     def test_supported_from_seq_slice_must_not_hide_an_older_round(self):
         first_head = ab.audit_head("peer", db=self.db)[0]
-        self.round(lie=None, mail=2, given=2)                 # második, BECSÜLETES kör
+        self.round(lie=None, mail=2, given=2)                 # second, HONEST round
         later = ab.audit_export("peer", from_seq=first_head + 1, db=self.db)
-        # SZERZŐDÉS-VÁLTOZÁS (2026-09-16, az ő MÁSIK szondája miatt): az `ok` mostantól a SZIGORÚBB
-        # jelentést hordozza (ép ÉS horgonyzott), a szelet épségét a `chain_ok` mondja. Ez az ELŐFELTÉTEL
-        # az épségre kérdez — a szonda LELETE (a késői szelet ne rejtsen el egy korábbi kört) változatlan.
-        self.assertTrue(later and ab.audit_chain_verify(later)["chain_ok"], "előfeltétel: a késői szelet ép")
+        # CONTRACT CHANGE (2026-09-16, because of his OTHER probe): `ok` now carries the STRICTER
+        # meaning (sound AND anchored), and `chain_ok` states the slice's soundness. This PRECONDITION
+        # asks about soundness -- the probe's FINDING (the later slice must not hide an earlier round) is unchanged.
+        self.assertTrue(later and ab.audit_chain_verify(later)["chain_ok"], "precondition: the later slice is sound")
         v = self.verdict(later)
-        self.assertNotEqual(v["hard"], [], "a `from_seq` szelet eltüntette az ELSŐ kör kihagyását")
+        self.assertNotEqual(v["hard"], [], "the `from_seq` slice erased the FIRST round's skip")
 
-    # ── LELET D: az export IDENTITÁSA nincs ellenőrizve — idegen agent naplója zöld lámpát ad ──
+    # -- FINDING D: the export's IDENTITY is not checked -- a foreign agent's log gives a green light --
     def test_foreign_agent_export_must_not_count_as_the_second_register(self):
         ab.send("hub", "other", "x", db=self.db, mirror=False)
         ab.recv("other", mark=False, db=self.db)
         ab.ack("other", 1, db=self.db)
         foreign = ab.audit_export("other", db=self.db)
-        self.assertTrue(foreign, "előfeltétel: az idegen agentnek van saját lánca")
+        self.assertTrue(foreign, "precondition: the foreign agent has its own chain")
         v = self.verdict(foreign)
-        self.assertNotEqual(v["hard"], [], "egy IDEGEN agent audit-exportja teljes értékű bizonyítéknak számított")
+        self.assertNotEqual(v["hard"], [], "a FOREIGN agent's audit export counted as full-value evidence")
 
-    # ── LELET E: a naplóban nincs horgony a lánc fejére (audit_head a termék-kódban holt) ──
+    # -- FINDING E: nothing in the log anchors the chain head (audit_head is dead in the product code) --
     def test_round_entry_should_anchor_the_audit_head(self):
         seq, rh = ab.audit_head("peer", db=self.db)
-        self.assertTrue(rh, "előfeltétel: van lánc-fej")
+        self.assertTrue(rh, "precondition: there is a chain head")
         rounds = [e for e in bn.export(self.log, 1)
                   if e.get("kind") == "pickup" and isinstance(e.get("cursor"), dict) and "pending" in e["cursor"]]
-        self.assertTrue(rounds, "előfeltétel: van gépi mezős kör-bejegyzés")
+        self.assertTrue(rounds, "precondition: there is a round entry with machine fields")
         self.assertTrue(any(k in rounds[-1]["cursor"] for k in ("audit_seq", "audit_hash")),
-                        "a kör-bejegyzés nem köti meg a busz audit-láncának fejét: %s" % json.dumps(rounds[-1]["cursor"]))
+                        "the round entry does not bind the head of the bus audit chain: %s" % json.dumps(rounds[-1]["cursor"]))
 
 
 class CliVerdictFlipsWithAShorterFile(_Scenario):
-    """Ugyanez a CLI rc-jén — ez a szám, amit az üzemeltető lát."""
+    """The same on the CLI rc -- this is the number the operator sees."""
 
     def setUp(self):
         super().setUp()
@@ -192,22 +193,22 @@ class CliVerdictFlipsWithAShorterFile(_Scenario):
 
     def test_control_full_file_is_red_and_missing_file_is_red(self):
         rows = ab.audit_export("peer", db=self.db)
-        self.assertEqual(self.rc(self.audit_file(rows, "full.jsonl"))[0], 1, "teljes export: rc=1 (ellentmondás)")
-        self.assertEqual(self.rc(None)[0], 1, "export nélkül: rc=1 (hiányos bizonyíték)")
+        self.assertEqual(self.rc(self.audit_file(rows, "full.jsonl"))[0], 1, "full export: rc=1 (contradiction)")
+        self.assertEqual(self.rc(None)[0], 1, "without an export: rc=1 (incomplete evidence)")
 
     def test_shorter_file_must_not_turn_the_light_green(self):
         rows = ab.audit_export("peer", db=self.db)
         code, err = self.rc(self.audit_file(rows[:-1], "short.jsonl"))
-        self.assertEqual(code, 1, "egy sorral rövidebb, ÉP láncú export → rc=%d, stderr=%r" % (code, err.strip()))
+        self.assertEqual(code, 1, "an export one row shorter, with a SOUND chain -> rc=%d, stderr=%r" % (code, err.strip()))
 
 
 class TheDocumentedProducerDoesNotExist(unittest.TestCase):
-    """A kikényszerített politika (`rc=1, hiányos bizonyíték`) egy NEM LÉTEZŐ parancsra küldi az üzemeltetőt."""
+    """The enforced policy (`rc=1, incomplete evidence`) sends the operator to a command that DOES NOT EXIST."""
 
     def test_agent_bus_audit_export_subcommand_exists(self):
-        self.assertIn("audit-verify", _subcommands(), "kontroll: a létező alparancsot a szonda megtalálja")
+        self.assertIn("audit-verify", _subcommands(), "control: the probe finds the existing subcommand")
         self.assertIn("audit-export", _subcommands(),
-                      "a --bus-audit súgója és a strict rc=1 üzenete is 'agent_bus.py audit-export <agent>'-re küld")
+                      "the --bus-audit help and the strict rc=1 message both point to 'agent_bus.py audit-export <agent>'")
 
 
 def _subcommands():

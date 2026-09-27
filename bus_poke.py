@@ -342,7 +342,7 @@ class Poker:
             self._last_inject_ns = now
             _log("INJECT -> tmux %s (%d pending)" % (target, pend))
             return "injected"
-        _log("inject kihagyva/sikertelen (tmux %s): %s" % (target, st))
+        _log("inject skipped/failed (tmux %s): %s" % (target, st))
         return st if st in ("typed", "busy", "sleep-safe", "stuck") else "no-target"
 
 
@@ -371,7 +371,7 @@ def _inotify_loop(poker):
     # (waking stays event-driven, not polling).
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-    _log("inotify figyel: %s" % poker.inbox)
+    _log("inotify watching: %s" % poker.inbox)
     try:
         while True:
             try:

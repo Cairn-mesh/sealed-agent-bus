@@ -266,7 +266,7 @@ class JointReviewPR4(Base):
 
     # --- / ---
     def test_H1_env_cannot_switch_back_to_dev(self):
-        open(os.path.join(self.tmp.name, enf.MARKER), "w").close()                 # marker a DB mellett
+        open(os.path.join(self.tmp.name, enf.MARKER), "w").close()                 # marker next to the DB
         empty = os.path.join(self.tmp.name, "ures"); os.makedirs(empty)
         ab.send("eve", "bypass1", "ALAIRATLAN PARANCS", db=self.db, mirror=False)
         env = {**os.environ, "AGENT_BRIDGE_DIR": empty, "AGENT_BUS_DIR": empty, "AGENT_BUS_MODE": "dev",
