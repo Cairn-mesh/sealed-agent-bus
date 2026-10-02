@@ -68,7 +68,18 @@ DEFAULT_ROOT = os.environ.get("AGENT_BUS_ATTACH_DIR",
 
 
 class AttachmentError(ValueError):
-    """Hash, size or descriptor error (fail-closed)."""
+    """Hash, size or descriptor error (fail-closed). `code` is the MACHINE reason (docs/AGENT_BUS_SCHEMA.md §8.6) — a
+    client branches on the code, never on the English text."""
+
+    def __init__(self, msg, code="attachment_error"):
+        super().__init__(msg)
+        self.code = code
+
+
+#: the closed set of machine codes an attachment/fetch status may carry (§8.6). A new code is a protocol MINOR bump.
+CODES = ("stored", "partial", "absent", "delivered", "bad_descriptor", "bad_chunk", "chunk_hash_mismatch",
+         "out_of_order", "in_progress", "quota_exceeded", "size_mismatch", "hash_mismatch", "not_found",
+         "round_fetch_budget", "bad_range", "attachment_error")
 
 
 def check_descriptor(desc) -> dict:
@@ -77,18 +88,18 @@ def check_descriptor(desc) -> dict:
         try:
             desc = json.loads(desc)
         except ValueError:
-            raise AttachmentError("descriptor is not JSON")
+            raise AttachmentError("descriptor is not JSON", "bad_descriptor")
     if not isinstance(desc, dict) or set(desc) != {"sha256", "size", "media_type", "locator"}:
-        raise AttachmentError("descriptor must have exactly sha256, size, media_type, locator")
+        raise AttachmentError("descriptor must have exactly sha256, size, media_type, locator", "bad_descriptor")
     h, size = desc["sha256"], desc["size"]
     if not isinstance(h, str) or not _HEX64.match(h):
-        raise AttachmentError("sha256 must be 64 lowercase hex")
+        raise AttachmentError("sha256 must be 64 lowercase hex", "bad_descriptor")
     if not isinstance(size, int) or isinstance(size, bool) or not (0 <= size <= MAX_ATTACHMENT):
-        raise AttachmentError("size out of range")
+        raise AttachmentError("size out of range", "bad_descriptor")
     if not isinstance(desc["media_type"], str) or not _MEDIA.match(desc["media_type"]):
-        raise AttachmentError("bad media_type")
+        raise AttachmentError("bad media_type", "bad_descriptor")
     if desc["locator"] != "sha256:" + h:
-        raise AttachmentError("locator must be sha256:<sha256>")
+        raise AttachmentError("locator must be sha256:<sha256>", "bad_descriptor")
     return desc
 
 
@@ -106,14 +117,14 @@ class Store:
                 d.update(blk)
                 n += len(blk)
         if size is not None and n != size:
-            raise AttachmentError("size mismatch: descriptor %d, stored %d" % (size, n))
+            raise AttachmentError("size mismatch: descriptor %d, stored %d" % (size, n), "size_mismatch")
         if d.hexdigest() != h:
-            raise AttachmentError("sha256 mismatch")
+            raise AttachmentError("sha256 mismatch", "hash_mismatch")
 
     def put(self, data: bytes, media_type: str = "application/octet-stream") -> dict:
         """Bytes into the store (write-once, dedupe). -> descriptor."""
         if len(data) > MAX_ATTACHMENT:
-            raise AttachmentError("attachment exceeds %d B" % MAX_ATTACHMENT)
+            raise AttachmentError("attachment exceeds %d B" % MAX_ATTACHMENT, "bad_descriptor")
         h = hashlib.sha256(data).hexdigest()
         desc = check_descriptor({"sha256": h, "size": len(data), "media_type": media_type, "locator": "sha256:" + h})
         p = self._path(h)
@@ -133,7 +144,7 @@ class Store:
         desc = check_descriptor(desc)
         p = self._path(desc["sha256"])
         if not os.path.exists(p):
-            raise AttachmentError("attachment not in store")
+            raise AttachmentError("attachment not in store", "not_found")
         self._verify_file(p, desc["sha256"], desc["size"])
         with open(p, "rb") as f:
             return f.read()
@@ -142,13 +153,46 @@ class Store:
         return os.path.exists(self._path(check_descriptor(desc)["sha256"]))
 
     # ── chunked transport ──────────────────────────────────────────────────
-    def chunks(self, desc, chunk_bytes: int = CHUNK_BYTES):
-        """The stored content in numbered chunks: {"sha256", "seq", "last", "data"} (data = base64)."""
-        data = self.get(desc)
-        n = max(1, -(-len(data) // chunk_bytes))
-        for i in range(n):
-            part = data[i * chunk_bytes:(i + 1) * chunk_bytes]
-            yield {"sha256": desc["sha256"], "seq": i, "last": i == n - 1, "data": base64.b64encode(part).decode()}
+    def chunk_count(self, desc, chunk_bytes: int = CHUNK_BYTES) -> int:
+        """How many chunks the described content has (an empty attachment is ONE empty chunk)."""
+        return max(1, -(-int(check_descriptor(desc)["size"]) // chunk_bytes))
+
+    def chunks(self, desc, chunk_bytes: int = CHUNK_BYTES, from_seq: int = 0, max_chunks: int | None = None):
+        """The stored content in numbered chunks: {"sha256", "seq", "last", "data", "chunk_sha256"} (data = base64;
+        chunk_sha256 = the sha256 of the DECODED chunk bytes, §8.3). `from_seq`/`max_chunks` select a RANGE (§8.4): the
+        whole stored file is still checked byte-exactly (size+sha256, fail-closed) BEFORE any chunk is served, and only
+        the requested range is read — a 512 MB attachment no longer has to fit one response."""
+        desc = check_descriptor(desc)
+        p = self._path(desc["sha256"])
+        if not os.path.exists(p):
+            raise AttachmentError("attachment not in store", "not_found")
+        self._verify_file(p, desc["sha256"], desc["size"])
+        n = self.chunk_count(desc, chunk_bytes)
+        if isinstance(from_seq, bool) or not isinstance(from_seq, int) or not (0 <= from_seq < n):
+            raise AttachmentError("from_seq out of range [0, %d)" % n, "bad_range")
+        stop = n if max_chunks is None else min(n, from_seq + max(0, int(max_chunks)))
+        with open(p, "rb") as f:
+            f.seek(from_seq * chunk_bytes)
+            for i in range(from_seq, stop):
+                part = f.read(chunk_bytes)
+                yield {"sha256": desc["sha256"], "seq": i, "last": i == n - 1,
+                       "data": base64.b64encode(part).decode(), "chunk_sha256": hashlib.sha256(part).hexdigest()}
+
+    def status(self, desc) -> dict:
+        """The MACHINE-readable state of one transfer (§8.5): {"state": stored|partial|absent, "next_seq": int}.
+        `next_seq` = the seq the store expects next (stored -> the chunk count, absent -> 0). Read-only."""
+        desc = check_descriptor(desc)
+        p = self._path(desc["sha256"])
+        if os.path.exists(p):
+            return {"state": "stored", "next_seq": self.chunk_count(desc)}
+        try:
+            with open(p + ".partial.json", encoding="utf-8") as f:
+                nxt = json.load(f)["next_seq"]
+            if isinstance(nxt, int) and not isinstance(nxt, bool) and nxt > 0:
+                return {"state": "partial", "next_seq": nxt}
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        return {"state": "absent", "next_seq": 0}
 
     def work_stats(self) -> dict:
         """The store's WORK FILES (abandoned `.partial`, orphaned `.partial.abandoned.*`, hash-failed `.rejected.*`)
@@ -175,7 +219,7 @@ class Store:
         desc = check_descriptor(desc)
         h = desc["sha256"]
         if not isinstance(chunk, dict) or chunk.get("sha256") != h:
-            raise AttachmentError("chunk does not belong to descriptor")
+            raise AttachmentError("chunk does not belong to descriptor", "bad_chunk")
         if self.has(desc):                                      # already present (dedupe) → the chunk is unnecessary
             return desc if chunk.get("last") else None
         p = self._path(h)
@@ -198,26 +242,37 @@ class Store:
             if idle < PARTIAL_STALE_S:
                 raise AttachmentError("chunk out of order: expected seq %d, got 0 — a transfer of this content is in "
                                       "progress (idle %ds); a seq-0 restart is accepted once it has been idle for %ds"
-                                      % (expected, idle, PARTIAL_STALE_S))
+                                      % (expected, idle, PARTIAL_STALE_S), "in_progress")
             tag = ".abandoned.%d" % int(time.time() * 1000)
             for src in (part, meta):
                 if os.path.exists(src):
                     os.replace(src, src + tag)
             expected = 0
         if chunk.get("seq") != expected:
-            raise AttachmentError("chunk out of order: expected seq %d, got %r" % (expected, chunk.get("seq")))
+            raise AttachmentError("chunk out of order: expected seq %d, got %r" % (expected, chunk.get("seq")),
+                                  "out_of_order")
         if expected == 0:                                        # a NEW transfer starts: does it still fit into the work-file quota?
             used = self.work_stats()["bytes"]
             if used + int(desc["size"]) > MAX_WORK_BYTES:
                 raise AttachmentError("attachment work quota exceeded: %d + %d > %d (cleaning up abandoned/rejected "
-                                      "work files is an operator decision)" % (used, desc["size"], MAX_WORK_BYTES))
+                                      "work files is an operator decision)" % (used, desc["size"], MAX_WORK_BYTES),
+                                      "quota_exceeded")
         try:
             data = base64.b64decode(chunk.get("data", ""), validate=True)
         except (ValueError, TypeError):
-            raise AttachmentError("chunk data is not base64")
+            raise AttachmentError("chunk data is not base64", "bad_chunk")
+        # §8.3: a chunk MAY carry `chunk_sha256` (the sha256 of its DECODED bytes). If present it is checked BEFORE the
+        # bytes touch the work file: a corrupted chunk is refused at ITS seq (the transfer stays resumable at that seq),
+        # instead of poisoning the whole transfer and being found only by the final whole-file hash.
+        ch_h = chunk.get("chunk_sha256")
+        if ch_h is not None:
+            if not isinstance(ch_h, str) or not _HEX64.match(ch_h):
+                raise AttachmentError("chunk_sha256 must be 64 lowercase hex", "bad_chunk")
+            if hashlib.sha256(data).hexdigest() != ch_h:
+                raise AttachmentError("chunk_sha256 mismatch at seq %d" % expected, "chunk_hash_mismatch")
         cur = os.path.getsize(part) if os.path.exists(part) else 0
         if cur + len(data) > desc["size"]:
-            raise AttachmentError("size mismatch: chunks exceed descriptor size")
+            raise AttachmentError("size mismatch: chunks exceed descriptor size", "size_mismatch")
         with open(part, "ab") as f:
             f.write(data)
         with open(meta, "w", encoding="utf-8") as f:

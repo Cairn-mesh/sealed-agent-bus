@@ -1,3 +1,30 @@
+## [Unreleased] — sab-attach/1: the attachment exchange protocol, written down and closed
+
+Answers the eleven questions a partner's attachment client raised against the exchange at `eb56c5e`. `PROTOCOL_VERSION`
+stays 1.5.0, `SCHEMA_VERSION` 1.0.0; every change is ADDITIVE for an old client. The evidence envelope is NOT resealed
+here: a reseal names a new `RELEASE_VERSION`, which is the release owner's decision.
+
+- **Normative text:** `docs/AGENT_BUS_SCHEMA.md` §8 — round processing order (ack → messages → attachments → fetch →
+  replies), descriptor and chunk objects, fetch, upload status, a closed table of machine codes, the companion record,
+  the SPEC §4 limits, idempotency, which `in_reply_to` the bus threads on, the store. The code table is held equal to
+  `bus_attach.CODES` by a test.
+- **Ranged fetch:** `{"descriptor", "from_seq"}` returns whole chunks up to the round budget plus `next_seq` /
+  `total_chunks`; an attachment above 4 MiB can now be pulled (it could not before: the bare form was `deferred` in
+  every round). The stored file is re-checked before any chunk is served.
+- **Chunk hash:** served chunks carry `chunk_sha256`; on upload it is optional and, if present, checked before the bytes
+  are written (`chunk_hash_mismatch`, resumable at the same `seq`).
+- **Machine status:** every upload item reports `code` and `next_seq`; an empty `chunks` list is a status query.
+- **Companion record:** ONE sds-envelope record with `schema: capsule-sync/attachment/v1` and a closed `descriptor`.
+  Accepted only if the bytes are already stored here (`attachment_not_stored`) and within SPEC §4 (`limit_raw_bytes`
+  8192 on the whole frame, `limit_bytes` 4096 on the canonical body, record_id excluded). Other sds-envelope records
+  are measured (`sds[]` in the response), not refused — the live bus holds 150 earlier records above 4096.
+- **Idempotent insert:** `(sender, recipient, envelope.record_id)` already present → the existing id, `duplicates[]`,
+  no second row; serialized by a file lock; a lookup error inserts nothing (`idem_unknown`).
+- **`in_reply_to`:** the bus threads on the OUTER field; outer ≠ record value → `in_reply_to_mismatch`; record-only →
+  accepted with the warning `in_reply_to_inner_only`.
+- **Evidence:** `test_attach_protocol_20261002.py` (34 tests) and `tools/attach_protocol_mutants.py` (18 code-anchored
+  mutants, each killed by an assertion; control all-pass).
+
 ## [1.5.5] — 2026-09-26 — translation-only release
 
 Translation-only release: all Hungarian text translated to English, internal notes moved to `docs/internal-hu/`; no behaviour change. `PROTOCOL_VERSION` stays 1.5.0, `SCHEMA_VERSION` 1.0.0; the wire contract, the signed shape and every conformance vector are byte-identical.

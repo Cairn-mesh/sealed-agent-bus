@@ -280,3 +280,139 @@ python scripts/agent_bus.py verify          # or "$AGENT_BRIDGE_DIR"/agent_bus.p
 ```
 Can be wired into CI (exit code). On DRIFT: do NOT write to the bus with the divergent client — agree on the bus,
 and either align it back, or (if truly additive + back-compat) bump the version per point 1 of this document.
+
+---
+
+## 8. Attachment exchange protocol `sab-attach/1` (NORMATIVE)
+
+This section is the normative text of the attachment hand-over over the SSH exchange (`bus_ssh_exchange.py`).
+Until `sab-attach/1` the protocol existed only as code; where this section and the code disagree, that is a bug
+to report, and **this section wins**. The response field `attach_protocol` names the revision (`"sab-attach/1"`).
+`sab-attach/1` is ADDITIVE over the earlier behaviour: an old client keeps working; every new response field is
+optional for it to read.
+
+### 8.1 Roles and the principle
+
+- A **sender** hands a file to a **recipient** over one bus. The bytes travel as an **attachment** (content-addressed
+  store, chunked); the hand-over **statement** travels as ONE companion message (§8.7).
+- **A reference is not a hand-over.** A companion message is accepted only when the bytes it describes are already
+  STORED on this bus, byte-checked (§8.8). A sender that only quotes a hash has handed nothing over.
+
+### 8.2 One round, and the processing order
+
+One SSH call = one round: stdin is one JSON object `{"ack"?, "messages"?, "attachments"?, "fetch"?}`, stdout is one
+JSON object. The server processes a round in this **fixed order**, and a client MAY rely on it:
+
+1. `ack` (cursor move), 2. `messages` in array order, 3. `attachments` in array order, 4. `fetch` in array order,
+5. `replies` (the recipient's undelivered mail, peeked).
+
+Consequence: a companion message sent in the SAME round as the last chunk is checked BEFORE the chunk is stored,
+and is rejected with `attachment_not_stored`. **Send the chunks first; send the companion message in a later round,
+after a round whose status reported `stored`.** Whole stdin ≤ `MAX_BYTES` (4 MiB); a larger payload → `"error":
+"oversize"`, nothing processed.
+
+### 8.3 Descriptor and chunk objects
+
+- **Descriptor** (closed, exactly four keys): `{"sha256": <64 lowercase hex>, "size": <int 0..MAX_ATTACHMENT>,
+  "media_type": <type/subtype>, "locator": "sha256:" + sha256}`. `MAX_ATTACHMENT` = 512 MiB (env may narrow it).
+- **Chunk**: `{"sha256": <the descriptor's sha256>, "seq": <int>, "last": <bool>, "data": <base64>,
+  "chunk_sha256"?: <64 lowercase hex>}`. `CHUNK_BYTES` = 262144 (256 KiB) for every chunk but the last; an empty
+  attachment is ONE empty chunk. `chunk_sha256` = sha256 of the **decoded** chunk bytes.
+  - The server ALWAYS sends `chunk_sha256` on fetched chunks.
+  - On upload it is OPTIONAL; if present the server checks it **before** the bytes touch the work file: a mismatch
+    is refused with `chunk_hash_mismatch` and the transfer stays resumable at that same `seq`. Senders SHOULD send it.
+- Upload chunks are strictly in order: `seq` = the number of chunks the store already holds for this content. The
+  content enters the store only after the last chunk, with a whole-file size + sha256 check.
+- Upload size per round is bounded by the stdin cap (`MAX_BYTES` = 4 MiB of JSON: 11 full chunks with `chunk_sha256` fit
+  (3 847 290 B), 12 do not (4 197 020 B) — ≈ 2.75 MiB of content per round); a larger attachment is uploaded over several rounds, resuming at `next_seq` (§8.5).
+
+### 8.4 Fetch (download)
+
+A `fetch` item is either:
+- a **bare descriptor** (legacy): the whole attachment in this round, or `"status": "deferred"`, `"code":
+  "round_fetch_budget"` if it does not fit the round budget; or
+- a **ranged request** `{"descriptor": <descriptor>, "from_seq": <int>}` (exactly these two keys): as many WHOLE
+  chunks starting at `from_seq` as fit the remaining round budget. This is how an attachment larger than the round
+  budget is pulled.
+
+Round budget: `MAX_FETCH_ITEMS` = 32 items and `MAX_FETCH_BYTES` = 4 MiB of **decoded** chunk bytes per round
+(env may narrow it). Before serving ANY chunk the server re-checks the whole stored file (size + sha256): a stored
+file that no longer matches is never served (`not-found` with code `hash_mismatch`/`size_mismatch`).
+
+Fetch result item: `{"sha256", "status": "delivered"|"partial"|"deferred"|"rejected"|"not-found", "code",
+"chunks"?, "from_seq"?, "next_seq"?, "total_chunks"?, "descriptor"?}`. `delivered` = the item's LAST chunk is
+included; `partial` = more remain, continue with `from_seq = next_seq`. The client reassembles, checks every
+`chunk_sha256`, and the whole-file sha256 against the descriptor before using a byte.
+
+### 8.5 Upload status (machine-readable)
+
+Every `attachments` item gets one result: `{"sha256", "status", "code", "next_seq", "state"?, "reason"?}`.
+- `status` is the STATE after this round: `stored` | `partial` | `absent`, or `rejected` when this round's chunks
+  were refused (then `state` carries the state after the refusal).
+- `next_seq` = the `seq` the server expects next (`stored` → the chunk count; `absent` → 0). **A client resumes at
+  `next_seq`; it never infers it.**
+- An item with an EMPTY `chunks` list is a pure **status query**: nothing is written, the result tells the state.
+- `reason` is human text and may change; branch only on `code`.
+
+### 8.6 Machine codes (closed set; a new code is a MINOR bump of `sab-attach`)
+
+| code | meaning |
+|---|---|
+| `stored` / `partial` / `absent` | upload state (§8.5) |
+| `delivered` / `partial` | fetch result (§8.4) |
+| `bad_descriptor` | descriptor not closed / not valid |
+| `bad_chunk` | chunk object malformed (wrong sha256, data not base64, malformed `chunk_sha256`) |
+| `chunk_hash_mismatch` | `chunk_sha256` ≠ sha256(decoded data); nothing written |
+| `out_of_order` | `seq` ≠ `next_seq` |
+| `in_progress` | a `seq` 0 arrived while another transfer of the same content is live (restart allowed after `PARTIAL_STALE_S` idle) |
+| `quota_exceeded` | the work-file quota would be exceeded by a NEW transfer (cleanup is an operator decision) |
+| `size_mismatch` / `hash_mismatch` | the assembled (or stored) bytes do not match the descriptor |
+| `not_found` | fetch: not in the store |
+| `round_fetch_budget` | fetch: does not fit this round; use a ranged fetch / next round |
+| `bad_range` | fetch: `from_seq` not an integer in `[0, total_chunks)`, or extra keys |
+| `attachment_not_stored`, `limit_raw_bytes`, `limit_bytes`, `in_reply_to_mismatch`, `idem_unknown` | companion-message rejections (§8.7–§8.10), in `rejected[].code` |
+
+### 8.7 The companion message: ONE sds-envelope record
+
+The hand-over statement is **one** `kind: "sds-envelope"` message whose framed record has
+`"schema": "capsule-sync/attachment/v1"` and a member `"descriptor"` = the closed descriptor of §8.3. The record MAY
+carry further members (e.g. `package_sha256`, a binding hash, a chunk list); the bus reads only `schema`,
+`descriptor` and `in_reply_to`. Its envelope signature is what makes the statement provable (`recv --verify-sds`).
+**A bare `kind: "attachment"` row is NOT required** and adds nothing the companion record does not carry; it stays
+valid for local, unsigned use. One companion record per attachment per recipient.
+
+### 8.8 The SPEC §4 limits (4096 / 8192)
+
+Their **normative home** is the capsule-sync-v2 SPEC §4: `MAX_RAW_BYTES = 8192` = the raw UTF-8 bytes of the WHOLE
+frame `{record, envelope}` as sent; `MAX_BYTES = 4096` = the record's **`canonical_body`** = JCS(record MINUS the
+top-level `record_id`) (SPEC §2). The `record_id` member is therefore NOT counted in the 4096.
+- For a companion record (§8.7) the bus ENFORCES both (`limit_raw_bytes`, `limit_bytes`), and requires that the
+  described attachment is `stored` here (`attachment_not_stored`).
+- For every other sds-envelope message the bus only MEASURES them and returns the numbers in the response
+  (`sds[] = {index, record_id, frame_bytes, canonical_body_bytes, within_spec_limits}`) — the bus's own body cap
+  (64 KiB) still applies. The bus's numbers are the authoritative measurement of what it received.
+
+### 8.9 Idempotent companion insert
+
+The key is `(sender identity, recipient, envelope.record_id)`. If an sds-envelope row with this key is already on
+the bus, the server does NOT insert a second row: the existing id is returned in `accepted`, and
+`duplicates[] = {index, id, record_id}` says so. A sender that lost a reply MAY resend the same frame safely. A
+different recipient is a different key (legitimate fan-out). If the server cannot decide (lookup error), it inserts
+nothing and rejects with `idem_unknown` (fail-closed).
+
+### 8.10 `in_reply_to` — which field
+
+The bus threads on the **outer** message field `in_reply_to` (the `messages.in_reply_to` column, inside the signed
+shape §2b). The record's own `in_reply_to` is record CONTENT; the bus never threads on it. Therefore:
+- a sender that means "this answers bus row N" MUST set the outer `in_reply_to` = N;
+- outer and record `in_reply_to` both present and different → rejected, `in_reply_to_mismatch`;
+- record `in_reply_to` present, outer absent → accepted with `warnings[] = {index, code: "in_reply_to_inner_only"}`
+  (the row is not threaded).
+An intake that threads hand-overs MUST read the outer field.
+
+### 8.11 The store
+
+The attachment store is the server's content-addressed directory `<AGENT_BUS_ATTACH_DIR>/<hex[:2]>/<hex>`
+(write-once, no deletion, mode 0444). The SAME store serves `fetch`; a recipient pulls with the descriptor it
+received in the companion record. Nothing else is implied: an operator-side intake reads the bytes through this
+store (fetch or `bus_attach.Store.get`, which re-checks size + sha256), never from a path a message names.

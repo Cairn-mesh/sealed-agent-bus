@@ -254,5 +254,38 @@ def _builtin_verify(rec, env, sender, admission, registry_pubkey):
     return "valid", ""
 
 
+# ── attachment companion record (docs/AGENT_BUS_SCHEMA.md §8.7–§8.8) ─────────────────────────────────────────
+#: capsule-sync-v2 SPEC §4 (the NORMATIVE home of these two numbers — this module only measures against them):
+#: `MAX_RAW_BYTES` = the WHOLE FRAME's raw UTF-8 bytes as sent; `MAX_BYTES` = the record's `canonical_body` =
+#: JCS(record MINUS top-level record_id) (SPEC §2) — NOT the record with its record_id member.
+SPEC_MAX_RAW_BYTES = 8192
+SPEC_MAX_BYTES = 4096
+#: the record schema of the ONE companion record that hands over an attachment (§8.7).
+ATTACH_SCHEMA = "capsule-sync/attachment/v1"
+
+
+def spec_limits(body):
+    """Measure a framed body against SPEC §4 -> {"frame_bytes", "canonical_body_bytes", "within_spec_limits"}.
+    The bus MEASURES every sds-envelope with this (and returns the numbers to the sender); it ENFORCES them only on
+    the attachment companion schema (§8.8) — 150 earlier long notes on the live bus are above 4096 and stay valid."""
+    raw = body.encode("utf-8", "surrogatepass") if isinstance(body, str) else json.dumps(body).encode("utf-8")
+    rec, _env = parse_framed(body)
+    cb = len(jcs({k: v for k, v in rec.items() if k != "record_id"}))
+    return {"frame_bytes": len(raw), "canonical_body_bytes": cb,
+            "within_spec_limits": len(raw) <= SPEC_MAX_RAW_BYTES and cb <= SPEC_MAX_BYTES}
+
+
+def attachment_descriptor_of(record):
+    """The companion record's descriptor (closed, checked) if `record.schema` is ATTACH_SCHEMA, else None.
+    A record that CLAIMS the schema but carries no valid descriptor -> ValueError (it is not silently "not ours")."""
+    if not isinstance(record, dict) or record.get("schema") != ATTACH_SCHEMA:
+        return None
+    import bus_attach
+    try:
+        return bus_attach.check_descriptor(record.get("descriptor"))
+    except bus_attach.AttachmentError as e:
+        raise ValueError("attachment-record: %s" % e)
+
+
 def label(status, why):
     return status if not why or status in ("valid", "unsigned") else "%s(%s)" % (status, why)
