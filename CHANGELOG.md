@@ -14,7 +14,8 @@ here: a reseal names a new `RELEASE_VERSION`, which is the release owner's decis
 - **Chunk hash:** served chunks carry `chunk_sha256`; on upload it is optional and, if present, checked before the bytes
   are written (`chunk_hash_mismatch`, resumable at the same `seq`).
 - **Machine status:** every upload item reports `code` and `next_seq`; an empty `chunks` list is a status query.
-- **Companion record:** ONE sds-envelope record with `schema: capsule-sync/attachment/v1` and a closed `descriptor`.
+- **Companion record:** ONE sds-envelope record with `schema: capsule-sync/attachment/v1` and the closed descriptor in
+  the member `attachment` (the name the first partner client already sends; one name only, `descriptor` is refused).
   Accepted only if the bytes are already stored here (`attachment_not_stored`) and within SPEC §4 (`limit_raw_bytes`
   8192 on the whole frame, `limit_bytes` 4096 on the canonical body, record_id excluded). Other sds-envelope records
   are measured (`sds[]` in the response), not refused — the live bus holds 150 earlier records above 4096.
@@ -22,7 +23,8 @@ here: a reseal names a new `RELEASE_VERSION`, which is the release owner's decis
   no second row; serialized by a file lock; a lookup error inserts nothing (`idem_unknown`).
 - **`in_reply_to`:** the bus threads on the OUTER field; outer ≠ record value → `in_reply_to_mismatch`; record-only →
   accepted with the warning `in_reply_to_inner_only`.
-- **Evidence:** `test_attach_protocol_20261002.py` (34 tests) and `tools/attach_protocol_mutants.py` (18 code-anchored
+- **Fetch is a capability:** any authenticated identity can fetch a stored attachment by its descriptor (stated in §8.11).
+- **Evidence:** `test_attach_protocol_20261002.py` (37 tests) and `tools/attach_protocol_mutants.py` (18 code-anchored
   mutants, each killed by an assertion; control all-pass).
 
 ## [1.5.5] — 2026-09-26 — translation-only release

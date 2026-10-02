@@ -276,13 +276,14 @@ def spec_limits(body):
 
 
 def attachment_descriptor_of(record):
-    """The companion record's descriptor (closed, checked) if `record.schema` is ATTACH_SCHEMA, else None.
-    A record that CLAIMS the schema but carries no valid descriptor -> ValueError (it is not silently "not ours")."""
+    """The companion record's descriptor (closed, checked) if `record.schema` is ATTACH_SCHEMA, else None. The
+    descriptor travels in the record member `attachment` (the name the first partner client already sends; ONE name,
+    §8.7). A record that CLAIMS the schema but carries no valid `attachment` -> ValueError (not silently "not ours")."""
     if not isinstance(record, dict) or record.get("schema") != ATTACH_SCHEMA:
         return None
     import bus_attach
     try:
-        return bus_attach.check_descriptor(record.get("descriptor"))
+        return bus_attach.check_descriptor(record.get("attachment"))
     except bus_attach.AttachmentError as e:
         raise ValueError("attachment-record: %s" % e)
 

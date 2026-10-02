@@ -375,9 +375,10 @@ Every `attachments` item gets one result: `{"sha256", "status", "code", "next_se
 ### 8.7 The companion message: ONE sds-envelope record
 
 The hand-over statement is **one** `kind: "sds-envelope"` message whose framed record has
-`"schema": "capsule-sync/attachment/v1"` and a member `"descriptor"` = the closed descriptor of §8.3. The record MAY
-carry further members (e.g. `package_sha256`, a binding hash, a chunk list); the bus reads only `schema`,
-`descriptor` and `in_reply_to`. Its envelope signature is what makes the statement provable (`recv --verify-sds`).
+`"schema": "capsule-sync/attachment/v1"` and a member `"attachment"` = the closed descriptor of §8.3 (one name; a
+record under this schema without a valid `attachment` member is rejected `bad_descriptor`). The record MAY carry
+further members (e.g. `kind`, `package_sha256`, `binding_sha256`, a per-chunk hash list, `subject`); the bus reads
+only `schema`, `attachment` and `in_reply_to`. Its envelope signature is what makes the statement provable (`recv --verify-sds`).
 **A bare `kind: "attachment"` row is NOT required** and adds nothing the companion record does not carry; it stays
 valid for local, unsigned use. One companion record per attachment per recipient.
 
@@ -416,3 +417,6 @@ The attachment store is the server's content-addressed directory `<AGENT_BUS_ATT
 (write-once, no deletion, mode 0444). The SAME store serves `fetch`; a recipient pulls with the descriptor it
 received in the companion record. Nothing else is implied: an operator-side intake reads the bytes through this
 store (fetch or `bus_attach.Store.get`, which re-checks size + sha256), never from a path a message names.
+`fetch` is NOT bound to the recipient of the companion record: any identity the bus authenticates can fetch a stored
+attachment by its descriptor — the sha256 is the capability. Whoever must not read a package must not receive its
+descriptor.

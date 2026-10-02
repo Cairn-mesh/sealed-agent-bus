@@ -69,7 +69,7 @@ class _Bus(unittest.TestCase):
         return json.dumps(tse.make_framed([(self.k, self.pub, "arm", "OrgA")], record=record, epoch=epoch))
 
     def companion(self, d, **extra):
-        rec = {"schema": se.ATTACH_SCHEMA, "kind": "attachment", "descriptor": d}
+        rec = {"schema": se.ATTACH_SCHEMA, "kind": "capsule", "attachment": d}
         rec.update(extra)
         return rec
 
@@ -247,9 +247,30 @@ class Companion(_Bus):
         self.assertEqual(self.rows(), [])
 
     def test_a_record_claiming_the_schema_without_a_valid_descriptor_is_rejected(self):
-        rec = {"schema": se.ATTACH_SCHEMA, "kind": "attachment", "descriptor": {"sha256": "nope"}}
+        rec = {"schema": se.ATTACH_SCHEMA, "kind": "capsule", "attachment": {"sha256": "nope"}}
         res = self.x({"messages": [{"to": "hub", "kind": "sds-envelope", "body": self.framed(rec)}]})
         self.assertEqual(res["rejected"][0]["code"], "bad_descriptor")
+
+    def test_the_partner_clients_record_shape_is_accepted(self):
+        """The shape the first partner client already sends (agent-bus#7, question 6), verbatim in its member names."""
+        d, _ = self.upload(b"tarbytes" * 40)
+        rec = {"schema": se.ATTACH_SCHEMA, "kind": "capsule", "attachment": d, "package_sha256": d["sha256"],
+               "binding_sha256": "ab" * 32, "subject": "hbb2-113",
+               "chunks": {"bytes": d["size"], "count": 1, "manifest_sha256": "cd" * 32, "sha256": [d["sha256"]]}}
+        res = self.x({"messages": [{"to": "hub", "kind": "sds-envelope", "body": self.framed(rec)}]})
+        self.assertEqual((len(res["accepted"]), res["rejected"]), (1, []))
+
+    def test_one_member_name_only(self):
+        """`descriptor` instead of `attachment` under the schema is refused, not silently read: two names = two rules."""
+        d, _ = self.upload(b"tarbytes" * 40)
+        rec = {"schema": se.ATTACH_SCHEMA, "kind": "capsule", "descriptor": d}
+        res = self.x({"messages": [{"to": "hub", "kind": "sds-envelope", "body": self.framed(rec)}]})
+        self.assertEqual(res["rejected"][0]["code"], "bad_descriptor")
+
+    def test_any_authenticated_identity_can_fetch_by_descriptor(self):
+        d, _ = self.upload(b"for-the-receiver" * 30, who="remote1")
+        r = self.x({"fetch": [{"descriptor": d, "from_seq": 0}]}, who="polaris")["fetched"][0]
+        self.assertEqual(r["status"], "delivered")
 
     def test_control_other_sds_records_are_untouched_by_the_companion_rules(self):
         res = self.x({"messages": [{"to": "hub", "kind": "sds-envelope", "body": self.framed(None)}]})
