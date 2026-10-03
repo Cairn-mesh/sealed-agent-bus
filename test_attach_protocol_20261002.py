@@ -89,8 +89,7 @@ class DocAgreesWithCode(unittest.TestCase):
         sec = self.DOC[self.DOC.index("### 8.6"):self.DOC.index("### 8.7")]
         first_cells = [ln.split("|")[1] for ln in sec.splitlines() if ln.startswith("| `")]
         in_doc = {c for cell in first_cells for c in re.findall(r"`([a-z_]+)`", cell)}
-        companion = {"attachment_not_stored", "limit_raw_bytes", "limit_bytes", "in_reply_to_mismatch", "idem_unknown"}
-        self.assertEqual(in_doc, set(ba.CODES) - {"attachment_error"} | companion)
+        self.assertEqual(in_doc, set(ba.CODES) | set(ex.COMPANION_CODES) | set(ex.WARNING_CODES))
 
     def test_the_per_round_upload_bound_the_doc_states_is_measured(self):
         t = tempfile.mkdtemp()
@@ -414,6 +413,242 @@ class InReplyTo(_Bus):
     def test_outer_as_numeric_string_is_the_same_number(self):
         res = self.send(str(self.parent), self.parent)
         self.assertEqual(res["rejected"], [])
+
+
+# ── the companion gate checks the stored BYTES, not the existence of a file ─────────────────────────────
+class CompanionGateChecksBytes(_Bus):
+    def send(self, d):
+        return self.x({"messages": [{"to": "hub", "kind": "sds-envelope", "body": self.framed(self.companion(d))}]})
+
+    def stored_path(self, d):
+        return os.path.join(self.att, d["sha256"][:2], d["sha256"])
+
+    def test_a_descriptor_claiming_one_byte_more_than_is_stored_is_not_a_hand_over(self):
+        d, _ = self.upload(b"x" * 23)
+        res = self.send(dict(d, size=24))
+        self.assertEqual([r["code"] for r in res["rejected"]], ["attachment_not_stored"])
+        self.assertIn("size_mismatch", res["rejected"][0]["reason"])
+        self.assertEqual((res["accepted"], self.rows()), ([], []))
+
+    def test_a_descriptor_claiming_one_byte_less_is_not_a_hand_over_either(self):
+        d, _ = self.upload(b"x" * 23)
+        res = self.send(dict(d, size=22))
+        self.assertEqual([r["code"] for r in res["rejected"]], ["attachment_not_stored"])
+        self.assertEqual(self.rows(), [])
+
+    def test_a_stored_file_corrupted_on_disk_is_not_a_hand_over(self):
+        d, _ = self.upload(b"payload-bytes" * 100)
+        p = self.stored_path(d)
+        os.chmod(p, 0o644)
+        with open(p, "r+b") as f:                              # same length, one byte changed
+            f.write(b"X")
+        res = self.send(d)
+        self.assertEqual([r["code"] for r in res["rejected"]], ["attachment_not_stored"])
+        self.assertIn("hash_mismatch", res["rejected"][0]["reason"])
+        self.assertEqual(self.rows(), [])
+
+    def test_a_stored_file_truncated_on_disk_is_not_a_hand_over(self):
+        d, _ = self.upload(b"payload-bytes" * 100)
+        p = self.stored_path(d)
+        os.chmod(p, 0o644)
+        with open(p, "r+b") as f:
+            f.truncate(d["size"] - 1)
+        res = self.send(d)
+        self.assertEqual([r["code"] for r in res["rejected"]], ["attachment_not_stored"])
+        self.assertEqual(self.rows(), [])
+
+    def test_the_upload_status_never_says_stored_for_a_size_the_store_does_not_hold(self):
+        d, _ = self.upload(b"x" * 23)
+        wrong = dict(d, size=24)
+        r = self.x({"attachments": [{"descriptor": wrong, "chunks": []}]})["attachments"][0]       # status query
+        self.assertEqual((r["status"], r["code"]), ("rejected", "size_mismatch"))
+        ch = {"sha256": d["sha256"], "seq": 0, "last": True, "data": base64.b64encode(b"x" * 24).decode()}
+        r = self.x({"attachments": [{"descriptor": wrong, "chunks": [ch]}]})["attachments"][0]     # the dedupe path
+        self.assertEqual((r["status"], r["code"]), ("rejected", "size_mismatch"))
+
+    def test_the_store_itself_refuses_a_chunk_for_a_size_it_does_not_hold(self):
+        d, _ = self.upload(b"x" * 23)
+        ch = {"sha256": d["sha256"], "seq": 0, "last": True, "data": base64.b64encode(b"x" * 24).decode()}
+        with self.assertRaises(ba.AttachmentError) as cm:
+            ba.Store(self.att).receive_chunk(dict(d, size=24), ch)
+        self.assertEqual(cm.exception.code, "size_mismatch")
+        self.assertEqual(ba.Store(self.att).receive_chunk(d, dict(ch, data=base64.b64encode(b"x" * 23).decode())), d)
+
+    def test_verify_names_what_is_wrong_with_the_stored_bytes(self):
+        d, _ = self.upload(b"x" * 23)
+        st = ba.Store(self.att)
+        self.assertEqual(st.verify(d), d)
+        for desc, code in ((dict(d, size=24), "size_mismatch"),
+                           (dict(d, sha256="ab" * 32, locator="sha256:" + "ab" * 32), "not_found")):
+            with self.assertRaises(ba.AttachmentError) as cm:
+                st.verify(desc)
+            self.assertEqual(cm.exception.code, code)
+
+    def test_control_the_true_descriptor_of_intact_bytes_is_accepted(self):
+        d, st = self.upload(b"x" * 23)
+        self.assertEqual((st["status"], st["next_seq"]), ("stored", 1))
+        r = self.x({"attachments": [{"descriptor": d, "chunks": []}]})["attachments"][0]
+        self.assertEqual((r["status"], r["code"], r["next_seq"]), ("stored", "stored", 1))
+        res = self.send(d)
+        self.assertEqual((len(res["accepted"]), res["rejected"], len(self.rows())), (1, [], 1))
+
+
+# ── idempotency is decided on the PARSED record_id, whatever the JSON text looks like ───────────────────
+class IdempotentWhateverTheJsonSpelling(_Bus):
+    def bodies(self):
+        d, _ = self.upload(b"q" * 64)
+        plain = self.framed(self.companion(d))
+        rid = json.loads(plain)["envelope"]["record_id"]
+        spell = {"plain": plain,
+                 "escaped_s": plain.replace('"sha256:', '"\\u0073ha256:'),              # the reported counterexample
+                 "escaped_hex": plain.replace(rid, "sha256:" + "".join("\\u%04x" % ord(c) for c in rid[7:])),
+                 "escaped_colon": plain.replace('"sha256:', '"sha256\\u003a'),
+                 "respaced": json.dumps(json.loads(plain), indent=1)}
+        for name, b in spell.items():                           # every spelling is the SAME valid signed frame
+            rec, env = se.parse_framed(b)
+            self.assertEqual((env["record_id"], rec["record_id"]), (rid, rid), name)
+            self.assertTrue(name == "plain" or b != plain, name)
+        self.assertNotIn(rid, spell["escaped_s"])
+        return spell, rid
+
+    def send(self, body):
+        return self.x({"messages": [{"to": "hub", "kind": "sds-envelope", "body": body}]})
+
+    def test_an_identical_resend_of_an_escaped_frame_adds_no_row(self):
+        spell, rid = self.bodies()
+        first = self.send(spell["escaped_s"])
+        again = self.send(spell["escaped_s"])
+        self.assertEqual(len(first["accepted"]), 1, first)
+        self.assertEqual(again["accepted"], first["accepted"])
+        self.assertEqual([(x["id"], x["record_id"]) for x in again["duplicates"]], [(first["accepted"][0], rid)])
+        self.assertEqual(len(self.rows()), 1)
+
+    def test_every_spelling_of_the_same_record_is_the_same_key_in_any_order(self):
+        spell, _rid = self.bodies()
+        names = sorted(spell)
+        for stored in names:
+            with self.subTest(stored=stored):
+                self.tearDown()
+                self.setUp()
+                spell, _rid = self.bodies()
+                first = self.send(spell[stored])
+                self.assertEqual(len(first["accepted"]), 1, first)
+                for resent in names:
+                    again = self.send(spell[resent])
+                    self.assertEqual(again["accepted"], first["accepted"], (stored, resent))
+                    self.assertEqual(len(again["duplicates"]), 1, (stored, resent))
+                self.assertEqual(len(self.rows()), 1)
+
+    def test_control_a_different_record_is_still_a_second_row(self):
+        spell, _rid = self.bodies()
+        d2, _ = self.upload(b"another" * 9)
+        other = self.framed(self.companion(d2)).replace('"sha256:', '"\\u0073ha256:')
+        a, b = self.send(spell["escaped_s"]), self.send(other)
+        self.assertNotEqual(a["accepted"], b["accepted"])
+        self.assertEqual((b["duplicates"], len(self.rows())), ([], 2))
+
+
+# ── §8.6 is closed: the doc table and the code sets are the same set ────────────────────────────────────
+class CodeSetIsClosed(_Bus):
+    def doc_codes(self):
+        doc = DocAgreesWithCode.DOC
+        sec = doc[doc.index("### 8.6"):doc.index("### 8.7")]
+        cells = [ln.split("|")[1] for ln in sec.splitlines() if ln.startswith("| `")]
+        return {c for cell in cells for c in re.findall(r"`([a-z_]+)`", cell)}
+
+    def test_the_doc_table_is_exactly_the_code_sets_nothing_left_out(self):
+        self.assertEqual(self.doc_codes(), set(ba.CODES) | set(ex.COMPANION_CODES) | set(ex.WARNING_CODES))
+
+    def test_every_code_literal_the_exchange_emits_is_in_a_declared_set(self):
+        src = open(os.path.join(HERE, "bus_ssh_exchange.py"), encoding="utf-8").read()
+        body = src[src.index("def exchange("):]
+        lits = set(re.findall(r'"code": "([a-z_-]+)"', body)) | set(re.findall(r'bad = \("([a-z_-]+)"', body)) \
+            | set(re.findall(r'getattr\(\w+, "code", "([a-z_-]+)"\)', body)) \
+            | set(re.findall(r'AttachmentError\([^\n]*?, "([a-z_-]+)"\)', body))
+        self.assertGreaterEqual(len(lits), 10)
+        self.assertEqual(lits - (set(ba.CODES) | set(ex.COMPANION_CODES) | set(ex.WARNING_CODES)), set())
+
+    def test_a_store_failure_that_is_no_protocol_error_is_reported_as_attachment_error(self):
+        src = ba.Store(os.path.join(self.tmp.name, "client"))
+        d = src.put(b"abc", "text/plain")
+        with mock.patch.object(ba.Store, "receive_chunk", side_effect=OSError("disk gone")):
+            r = self.x({"attachments": [{"descriptor": d, "chunks": list(src.chunks(d))}]})["attachments"][0]
+        self.assertEqual((r["status"], r["code"], r["state"], r["next_seq"]), ("rejected", "attachment_error", "absent", 0))
+        self.assertIn("attachment_error", self.doc_codes())
+
+
+# ── §8.3 chunk member types are enforced ────────────────────────────────────────────────────────────────
+class ChunkShapeIsEnforced(_Bus):
+    def setUp(self):
+        super().setUp()
+        self.src = ba.Store(os.path.join(self.tmp.name, "client"))
+        self.d = self.src.put(b"chunk-shape", "text/plain")
+        self.good = list(self.src.chunks(self.d))[0]
+
+    BAD = (("chunk_sha256 null", {"chunk_sha256": None}), ("chunk_sha256 number", {"chunk_sha256": 7}),
+           ("seq false", {"seq": False}), ("seq float", {"seq": 0.0}), ("seq string", {"seq": "0"}),
+           ("seq null", {"seq": None}), ("seq negative", {"seq": -1}),
+           ("last string", {"last": "false"}), ("last number", {"last": 1}), ("last null", {"last": None}),
+           ("data null", {"data": None}), ("data number", {"data": 5}), ("data list", {"data": []}))
+
+    def test_a_malformed_member_is_bad_chunk_and_nothing_is_stored(self):
+        for name, patch in self.BAD:
+            with self.subTest(name):
+                r = self.x({"attachments": [{"descriptor": self.d, "chunks": [dict(self.good, **patch)]}]})["attachments"][0]
+                self.assertEqual((r["status"], r["code"], r["state"], r["next_seq"]), ("rejected", "bad_chunk", "absent", 0), name)
+
+    def test_a_missing_required_member_is_bad_chunk(self):
+        for k in ("sha256", "seq", "last", "data"):
+            with self.subTest(k):
+                ch = {a: b for a, b in self.good.items() if a != k}
+                r = self.x({"attachments": [{"descriptor": self.d, "chunks": [ch]}]})["attachments"][0]
+                self.assertEqual((r["status"], r["code"], r["state"]), ("rejected", "bad_chunk", "absent"), k)
+
+    def test_a_chunk_that_is_not_an_object_is_bad_chunk(self):
+        for ch in ("x", 3, None, [self.good]):
+            r = self.x({"attachments": [{"descriptor": self.d, "chunks": [ch]}]})["attachments"][0]
+            self.assertEqual((r["status"], r["code"]), ("rejected", "bad_chunk"), ch)
+
+    def test_a_malformed_chunk_is_refused_even_when_the_content_is_already_stored(self):
+        self.assertEqual(self.x({"attachments": [{"descriptor": self.d, "chunks": [self.good]}]})["attachments"][0]["status"],
+                         "stored")
+        for name, patch in self.BAD:
+            with self.subTest(name):
+                r = self.x({"attachments": [{"descriptor": self.d, "chunks": [dict(self.good, **patch)]}]})["attachments"][0]
+                self.assertEqual((r["status"], r["code"], r["state"]), ("rejected", "bad_chunk", "stored"), name)
+
+    def test_control_the_well_formed_chunk_with_and_without_its_hash_and_with_an_unknown_member(self):
+        for i, ch in enumerate((self.good, {k: v for k, v in self.good.items() if k != "chunk_sha256"},
+                                dict(self.good, note="ignored"))):
+            d = self.src.put(b"chunk-shape-%d" % i, "text/plain")
+            c = dict(ch, sha256=d["sha256"], data=base64.b64encode(b"chunk-shape-%d" % i).decode())
+            if "chunk_sha256" in c:
+                c["chunk_sha256"] = hashlib.sha256(b"chunk-shape-%d" % i).hexdigest()
+            r = self.x({"attachments": [{"descriptor": d, "chunks": [c]}]})["attachments"][0]
+            self.assertEqual((r["status"], r["next_seq"]), ("stored", 1), i)
+
+
+# ── §8.4 a ranged request is EXACTLY {descriptor, from_seq} ─────────────────────────────────────────────
+class RangedRequestIsClosed(_Bus):
+    def test_a_ranged_request_without_from_seq_is_bad_range(self):
+        d, _ = self.upload(b"x" * 10)
+        r = self.x({"fetch": [{"descriptor": d}]})["fetched"][0]
+        self.assertEqual((r["status"], r["code"]), ("rejected", "bad_range"))
+        self.assertNotIn("chunks", r)
+
+    def test_a_ranged_request_with_any_other_member_set_is_bad_range(self):
+        d, _ = self.upload(b"x" * 10)
+        for item in ({"descriptor": d, "from_seq": 0, "extra": 1}, {"descriptor": d, "max_chunks": 1},
+                     {"descriptor": d, "from_seq": None}, {"descriptor": d, "from_seq": 0.0}):
+            r = self.x({"fetch": [item]})["fetched"][0]
+            self.assertEqual((r["status"], r["code"]), ("rejected", "bad_range"), item)
+            self.assertNotIn("chunks", r)
+
+    def test_control_the_two_documented_forms_deliver(self):
+        d, _ = self.upload(b"x" * 10)
+        for item in (d, {"descriptor": d, "from_seq": 0}):
+            r = self.x({"fetch": [item]})["fetched"][0]
+            self.assertEqual((r["status"], base64.b64decode(r["chunks"][0]["data"])), ("delivered", b"x" * 10))
 
 
 if __name__ == "__main__":

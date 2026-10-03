@@ -50,6 +50,11 @@ MAX_REPLIES = 200
 # DOWNLOAD (fetch) ceilings: one exchange round returns this many attachment bytes; a larger one must be requested in a separate,
 # dedicated round. The download comes from the content-addressed store (the sha256 is the capability: whoever received the
 # descriptor in a message addressed to them can pull it). The env can only NARROW (as with bus_enforce).
+#: §8.6, the codes outside the attachment/fetch items: `rejected[].code` of a message (§8.7–§8.10; `bad_descriptor` is
+#: shared with bus_attach.CODES) and `warnings[].code`. With bus_attach.CODES they are the WHOLE closed set of §8.6.
+COMPANION_CODES = ("attachment_not_stored", "limit_raw_bytes", "limit_bytes", "in_reply_to_mismatch", "idem_unknown",
+                   "bad_descriptor")
+WARNING_CODES = ("in_reply_to_inner_only",)
 MAX_FETCH_ITEMS = 32
 MAX_FETCH_BYTES = min(4 * 1024 * 1024, int(os.environ.get("AGENT_BUS_SSH_FETCH_MAX_BYTES", str(4 * 1024 * 1024))))
 _REPLY_KEYS = ("id", "ts", "sender", "topic", "kind", "thread_id", "in_reply_to", "body", "sds")
@@ -219,9 +224,16 @@ def _exchange(identity, raw, *, db, attach_root, notary):
                     elif lim["canonical_body_bytes"] > sds_envelope.SPEC_MAX_BYTES:
                         bad = ("limit_bytes", "canonical_body %d B > %d" % (lim["canonical_body_bytes"],
                                                                          sds_envelope.SPEC_MAX_BYTES))
-                    elif store.status(att)["state"] != "stored":
-                        bad = ("attachment_not_stored", "the described bytes are not stored on this bus yet "
-                                                        "(send the chunks first, the record in a later round)")
+                    else:
+                        # the stored BYTES are read and compared with the descriptor (size + sha256). A file that
+                        # merely exists under that hash — shorter, longer or changed on disk — is not a hand-over.
+                        try:
+                            store.verify(att)
+                        except bus_attach.AttachmentError as e:
+                            bad = ("attachment_not_stored",
+                                   "the described bytes are not stored on this bus yet (send the chunks first, the "
+                                   "record in a later round)" if e.code == "not_found" else
+                                   "the bytes stored on this bus do not match the descriptor (%s)" % e.code)
                 if bad is not None:
                     out["rejected"].append({"index": i, "reason": bad[1], "code": bad[0]})
                     note(envelope=m, recipient=m["to"], kind=kind, decision="rejected", reason=bad[0],
@@ -294,8 +306,9 @@ def _exchange(identity, raw, *, db, attach_root, notary):
         # §8.5: the MACHINE state after this round, always — the client resumes at `next_seq`, never guesses.
         try:
             st = store.status(desc)
-        except bus_attach.AttachmentError:
-            st = {"state": "absent", "next_seq": 0}
+        except bus_attach.AttachmentError as e:                # the descriptor's size is not the stored length: the
+            st = {"state": "absent", "next_seq": 0}            # DESCRIBED bytes are not here, and the item says why
+            err = err or e
         if err is not None:
             out["attachments"].append({"sha256": sha, "status": "rejected", "code": getattr(err, "code", "attachment_error"),
                                        "next_seq": st["next_seq"], "state": st["state"], "reason": str(err)[:200]})
@@ -317,9 +330,9 @@ def _exchange(identity, raw, *, db, attach_root, notary):
         env = desc if isinstance(desc, dict) else {}
         try:
             bus_attach.check_descriptor(desc)                  # purely formal
-            if ranged and set(item) - {"descriptor", "from_seq"}:
+            if ranged and set(item) != {"descriptor", "from_seq"}:
                 raise bus_attach.AttachmentError("ranged fetch takes exactly descriptor, from_seq", "bad_range")
-            from_seq = item.get("from_seq", 0) if ranged else 0
+            from_seq = item["from_seq"] if ranged else 0
             if isinstance(from_seq, bool) or not isinstance(from_seq, int):
                 raise bus_attach.AttachmentError("from_seq must be an integer", "bad_range")
         except (bus_attach.AttachmentError, AttributeError, TypeError) as e:

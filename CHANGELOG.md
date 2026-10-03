@@ -24,8 +24,26 @@ here: a reseal names a new `RELEASE_VERSION`, which is the release owner's decis
 - **`in_reply_to`:** the bus threads on the OUTER field; outer ≠ record value → `in_reply_to_mismatch`; record-only →
   accepted with the warning `in_reply_to_inner_only`.
 - **Fetch is a capability:** any authenticated identity can fetch a stored attachment by its descriptor (stated in §8.11).
-- **Evidence:** `test_attach_protocol_20261002.py` (37 tests) and `tools/attach_protocol_mutants.py` (18 code-anchored
-  mutants, each killed by an assertion; control all-pass).
+- **Review round (cross-family measurement of `3091f9e`), five findings closed:**
+  - *The companion gate checks the stored BYTES.* It used the transfer state (`Store.status`, i.e. "a file exists under
+    this hash"): a 23-byte stored file was accepted under a descriptor claiming 24, and so was a file changed on disk.
+    The gate now calls `Store.verify`, which reads the stored file and compares size and sha256 with the descriptor.
+    `status` no longer says `stored` for another size either (`size_mismatch`), on the status query and on the dedupe path.
+  - *Idempotency is decided on the parsed `record_id`.* The lookup pre-filtered the raw body text with
+    `instr(body, record_id)`; a frame spelling the id with a JSON escape (`"\u0073ha256:…"`) was inserted again on an
+    identical resend. The text pre-filter is gone: every sds-envelope row of the (sender, recipient) pair is parsed.
+    Measured cost: 47 ms per lookup at 1000 rows of ~3.5 KB, 261 ms at 5000 (linear; an index keyed on the parsed id
+    is the follow-up if a pair ever grows past that).
+  - *§8.6 is the whole code set.* `attachment_error` (a store failure that is no protocol error) and the warning
+    `in_reply_to_inner_only` are rows of the table; the table is bound to `bus_attach.CODES`,
+    `bus_ssh_exchange.COMPANION_CODES` and `WARNING_CODES`, and to every code literal in the exchange.
+  - *§8.3 chunk member types are enforced.* `"seq": false`, `"seq": 0.0`, `"last": "false"`, `"chunk_sha256": null`
+    and a missing `seq` / `last` / `data` were taken for a well-formed chunk; each is now `bad_chunk`, also when the
+    content is already stored. Unknown members stay ignored.
+  - *A ranged request is exactly `{descriptor, from_seq}`.* `{"descriptor": …}` alone defaulted to `from_seq` 0; it is
+    now `bad_range`.
+- **Evidence:** `test_attach_protocol_20261002.py` (59 tests) and `tools/attach_protocol_mutants.py` (37 code-anchored
+  mutants, each killed by an assertion; control all-pass). Every new negative control fails on `3091f9e`.
 
 ## [1.5.5] — 2026-09-26 — translation-only release
 

@@ -77,6 +77,7 @@ class AttachmentError(ValueError):
 
 
 #: the closed set of machine codes an attachment/fetch status may carry (§8.6). A new code is a protocol MINOR bump.
+#: `attachment_error` is the code of a failure that is none of the named ones (an I/O error of the store, …).
 CODES = ("stored", "partial", "absent", "delivered", "bad_descriptor", "bad_chunk", "chunk_hash_mismatch",
          "out_of_order", "in_progress", "quota_exceeded", "size_mismatch", "hash_mismatch", "not_found",
          "round_fetch_budget", "bad_range", "attachment_error")
@@ -101,6 +102,28 @@ def check_descriptor(desc) -> dict:
     if desc["locator"] != "sha256:" + h:
         raise AttachmentError("locator must be sha256:<sha256>", "bad_descriptor")
     return desc
+
+
+def check_chunk(desc, chunk) -> dict:
+    """Check one upload chunk against §8.3: an object with `sha256` = the descriptor's, `seq` = a non-negative integer
+    (not a bool, not a float), `last` = a bool, `data` = a string, and — only if the member is PRESENT — `chunk_sha256`
+    = 64 lowercase hex (`null` is not "absent"). Unknown members are ignored. -> the chunk; else `bad_chunk`.
+    JSON `false`/`0.0` compare equal to 0 and a non-empty string is truthy in Python, so without this a chunk with
+    `"seq": false` or `"last": "false"` was taken for a well-formed first-and-last chunk."""
+    if not isinstance(chunk, dict) or chunk.get("sha256") != desc["sha256"]:
+        raise AttachmentError("chunk does not belong to descriptor", "bad_chunk")
+    seq = chunk.get("seq")
+    if isinstance(seq, bool) or not isinstance(seq, int) or seq < 0:
+        raise AttachmentError("chunk seq must be a non-negative integer", "bad_chunk")
+    if not isinstance(chunk.get("last"), bool):
+        raise AttachmentError("chunk last must be true or false", "bad_chunk")
+    if not isinstance(chunk.get("data"), str):
+        raise AttachmentError("chunk data must be a base64 string", "bad_chunk")
+    if "chunk_sha256" in chunk:
+        ch_h = chunk["chunk_sha256"]
+        if not isinstance(ch_h, str) or not _HEX64.match(ch_h):
+            raise AttachmentError("chunk_sha256 must be 64 lowercase hex", "bad_chunk")
+    return chunk
 
 
 class Store:
@@ -152,6 +175,25 @@ class Store:
     def has(self, desc) -> bool:
         return os.path.exists(self._path(check_descriptor(desc)["sha256"]))
 
+    def verify(self, desc) -> dict:
+        """The described BYTES are in the store: the stored file is read and its size AND sha256 are compared with the
+        descriptor (nothing is loaded into memory). -> the descriptor; otherwise AttachmentError with the code
+        `not_found` / `size_mismatch` / `hash_mismatch`. This — not `status()`, not `has()` — is what a statement
+        about the bytes (the companion record, §8.8) has to rest on: a file that merely EXISTS proves nothing."""
+        desc = check_descriptor(desc)
+        p = self._path(desc["sha256"])
+        if not os.path.exists(p):
+            raise AttachmentError("attachment not in store", "not_found")
+        self._verify_file(p, desc["sha256"], desc["size"])
+        return desc
+
+    def _stored_size_agrees(self, p: str, desc: dict) -> None:
+        """A stored file under this sha256 whose length is not the descriptor's `size` -> `size_mismatch`. Only a
+        stat (cheap, on every status); the full byte check is `verify()`."""
+        n = os.path.getsize(p)
+        if n != desc["size"]:
+            raise AttachmentError("size mismatch: descriptor %d, stored %d" % (desc["size"], n), "size_mismatch")
+
     # ── chunked transport ──────────────────────────────────────────────────
     def chunk_count(self, desc, chunk_bytes: int = CHUNK_BYTES) -> int:
         """How many chunks the described content has (an empty attachment is ONE empty chunk)."""
@@ -180,10 +222,13 @@ class Store:
 
     def status(self, desc) -> dict:
         """The MACHINE-readable state of one transfer (§8.5): {"state": stored|partial|absent, "next_seq": int}.
-        `next_seq` = the seq the store expects next (stored -> the chunk count, absent -> 0). Read-only."""
+        `next_seq` = the seq the store expects next (stored -> the chunk count, absent -> 0). Read-only. `stored` is
+        never said for a descriptor whose `size` is not the stored length (`size_mismatch`); it is still only a
+        TRANSFER state — whether the stored bytes are intact is `verify()`."""
         desc = check_descriptor(desc)
         p = self._path(desc["sha256"])
         if os.path.exists(p):
+            self._stored_size_agrees(p, desc)
             return {"state": "stored", "next_seq": self.chunk_count(desc)}
         try:
             with open(p + ".partial.json", encoding="utf-8") as f:
@@ -218,11 +263,11 @@ class Store:
         content goes through a hash+size check, and only then enters the store. -> descriptor (done) or None (more to come)."""
         desc = check_descriptor(desc)
         h = desc["sha256"]
-        if not isinstance(chunk, dict) or chunk.get("sha256") != h:
-            raise AttachmentError("chunk does not belong to descriptor", "bad_chunk")
-        if self.has(desc):                                      # already present (dedupe) → the chunk is unnecessary
-            return desc if chunk.get("last") else None
+        check_chunk(desc, chunk)                                # §8.3 member types, BEFORE anything else looks at it
         p = self._path(h)
+        if os.path.exists(p):                                   # already present (dedupe) → the chunk is unnecessary
+            self._stored_size_agrees(p, desc)
+            return desc if chunk["last"] else None
         part, meta = p + ".partial", p + ".partial.json"
         os.makedirs(os.path.dirname(p), exist_ok=True)
         try:
@@ -258,17 +303,14 @@ class Store:
                                       "work files is an operator decision)" % (used, desc["size"], MAX_WORK_BYTES),
                                       "quota_exceeded")
         try:
-            data = base64.b64decode(chunk.get("data", ""), validate=True)
+            data = base64.b64decode(chunk["data"], validate=True)
         except (ValueError, TypeError):
             raise AttachmentError("chunk data is not base64", "bad_chunk")
         # §8.3: a chunk MAY carry `chunk_sha256` (the sha256 of its DECODED bytes). If present it is checked BEFORE the
         # bytes touch the work file: a corrupted chunk is refused at ITS seq (the transfer stays resumable at that seq),
         # instead of poisoning the whole transfer and being found only by the final whole-file hash.
-        ch_h = chunk.get("chunk_sha256")
-        if ch_h is not None:
-            if not isinstance(ch_h, str) or not _HEX64.match(ch_h):
-                raise AttachmentError("chunk_sha256 must be 64 lowercase hex", "bad_chunk")
-            if hashlib.sha256(data).hexdigest() != ch_h:
+        if "chunk_sha256" in chunk:                              # its shape was checked by check_chunk()
+            if hashlib.sha256(data).hexdigest() != chunk["chunk_sha256"]:
                 raise AttachmentError("chunk_sha256 mismatch at seq %d" % expected, "chunk_hash_mismatch")
         cur = os.path.getsize(part) if os.path.exists(part) else 0
         if cur + len(data) > desc["size"]:
@@ -277,7 +319,7 @@ class Store:
             f.write(data)
         with open(meta, "w", encoding="utf-8") as f:
             json.dump({"next_seq": expected + 1}, f)
-        if not chunk.get("last"):
+        if not chunk["last"]:
             return None
         try:
             self._verify_file(part, h, desc["size"])

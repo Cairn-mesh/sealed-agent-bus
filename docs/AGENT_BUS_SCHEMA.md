@@ -318,6 +318,12 @@ after a round whose status reported `stored`.** Whole stdin ≤ `MAX_BYTES` (4 M
 - **Chunk**: `{"sha256": <the descriptor's sha256>, "seq": <int>, "last": <bool>, "data": <base64>,
   "chunk_sha256"?: <64 lowercase hex>}`. `CHUNK_BYTES` = 262144 (256 KiB) for every chunk but the last; an empty
   attachment is ONE empty chunk. `chunk_sha256` = sha256 of the **decoded** chunk bytes.
+  - The member types are ENFORCED on upload: `sha256` equals the descriptor's; `seq` is a JSON integer ≥ 0 (not
+    `false`, not `0.0`, not `"0"`); `last` is `true` or `false` (not `"false"`, not `1`, not `null`); `data` is a
+    string; `sha256`, `seq`, `last` and `data` are all REQUIRED. `chunk_sha256` is either ABSENT or 64 lowercase hex
+    — `"chunk_sha256": null` is malformed, not "absent". Any violation is `bad_chunk`: nothing is written, the
+    transfer state is unchanged, and this holds even when the content is already stored. Members other than these
+    five are ignored.
   - The server ALWAYS sends `chunk_sha256` on fetched chunks.
   - On upload it is OPTIONAL; if present the server checks it **before** the bytes touch the work file: a mismatch
     is refused with `chunk_hash_mismatch` and the transfer stays resumable at that same `seq`. Senders SHOULD send it.
@@ -333,7 +339,8 @@ A `fetch` item is either:
   "round_fetch_budget"` if it does not fit the round budget; or
 - a **ranged request** `{"descriptor": <descriptor>, "from_seq": <int>}` (exactly these two keys): as many WHOLE
   chunks starting at `from_seq` as fit the remaining round budget. This is how an attachment larger than the round
-  budget is pulled.
+  budget is pulled. An object with a `descriptor` member is a ranged request, and its key set must be EXACTLY
+  `{descriptor, from_seq}`: a missing `from_seq` is `bad_range` (there is no default), and so is any further key.
 
 Round budget: `MAX_FETCH_ITEMS` = 32 items and `MAX_FETCH_BYTES` = 4 MiB of **decoded** chunk bytes per round
 (env may narrow it). Before serving ANY chunk the server re-checks the whole stored file (size + sha256): a stored
@@ -352,6 +359,10 @@ Every `attachments` item gets one result: `{"sha256", "status", "code", "next_se
 - `next_seq` = the `seq` the server expects next (`stored` → the chunk count; `absent` → 0). **A client resumes at
   `next_seq`; it never infers it.**
 - An item with an EMPTY `chunks` list is a pure **status query**: nothing is written, the result tells the state.
+- `stored` is never reported for a descriptor whose `size` is not the length of the stored content of that `sha256`:
+  such an item is `rejected` with `size_mismatch` (`state`: `absent` — the DESCRIBED bytes are not here).
+- `stored` is a TRANSFER state (the upload completed its whole-file check). It is not a fresh statement about the
+  bytes on disk; fetch (§8.4) and the companion gate (§8.8) re-read them.
 - `reason` is human text and may change; branch only on `code`.
 
 ### 8.6 Machine codes (closed set; a new code is a MINOR bump of `sab-attach`)
@@ -361,16 +372,21 @@ Every `attachments` item gets one result: `{"sha256", "status", "code", "next_se
 | `stored` / `partial` / `absent` | upload state (§8.5) |
 | `delivered` / `partial` | fetch result (§8.4) |
 | `bad_descriptor` | descriptor not closed / not valid |
-| `bad_chunk` | chunk object malformed (wrong sha256, data not base64, malformed `chunk_sha256`) |
+| `bad_chunk` | chunk object malformed (§8.3: not an object, wrong sha256, a missing or wrongly typed `seq` / `last` / `data`, data not base64, malformed `chunk_sha256`) |
 | `chunk_hash_mismatch` | `chunk_sha256` ≠ sha256(decoded data); nothing written |
 | `out_of_order` | `seq` ≠ `next_seq` |
 | `in_progress` | a `seq` 0 arrived while another transfer of the same content is live (restart allowed after `PARTIAL_STALE_S` idle) |
 | `quota_exceeded` | the work-file quota would be exceeded by a NEW transfer (cleanup is an operator decision) |
 | `size_mismatch` / `hash_mismatch` | the assembled (or stored) bytes do not match the descriptor |
+| `attachment_error` | upload: the server failed on this item for a reason that is none of the codes above (e.g. an I/O error of the store); `state` / `next_seq` still tell where the transfer stands |
 | `not_found` | fetch: not in the store |
 | `round_fetch_budget` | fetch: does not fit this round; use a ranged fetch / next round |
-| `bad_range` | fetch: `from_seq` not an integer in `[0, total_chunks)`, or extra keys |
-| `attachment_not_stored`, `limit_raw_bytes`, `limit_bytes`, `in_reply_to_mismatch`, `idem_unknown` | companion-message rejections (§8.7–§8.10), in `rejected[].code` |
+| `bad_range` | fetch: a ranged request whose keys are not exactly `{descriptor, from_seq}`, or whose `from_seq` is not an integer in `[0, total_chunks)` |
+| `attachment_not_stored`, `limit_raw_bytes`, `limit_bytes`, `in_reply_to_mismatch`, `idem_unknown` | companion-message rejections (§8.7–§8.10), in `rejected[].code` (`bad_descriptor` appears there too) |
+| `in_reply_to_inner_only` | the one warning (§8.10), in `warnings[].code` |
+
+This table is the WHOLE set: the server emits no `code` that is not a row here (the test suite binds the table to
+the code's three sets, and to every code literal in the exchange).
 
 ### 8.7 The companion message: ONE sds-envelope record
 
@@ -388,14 +404,19 @@ Their **normative home** is the capsule-sync-v2 SPEC §4: `MAX_RAW_BYTES = 8192`
 frame `{record, envelope}` as sent; `MAX_BYTES = 4096` = the record's **`canonical_body`** = JCS(record MINUS the
 top-level `record_id`) (SPEC §2). The `record_id` member is therefore NOT counted in the 4096.
 - For a companion record (§8.7) the bus ENFORCES both (`limit_raw_bytes`, `limit_bytes`), and requires that the
-  described attachment is `stored` here (`attachment_not_stored`).
+  described BYTES are in its store (`attachment_not_stored`): at the moment the record arrives the server READS the
+  stored file and compares its length with the descriptor's `size` and its sha256 with the descriptor's `sha256`.
+  The existence of a file under that hash is not enough — a descriptor claiming another size, or a stored file that
+  was truncated or changed on disk, is refused (the `reason` names `size_mismatch` / `hash_mismatch`).
 - For every other sds-envelope message the bus only MEASURES them and returns the numbers in the response
   (`sds[] = {index, record_id, frame_bytes, canonical_body_bytes, within_spec_limits}`) — the bus's own body cap
   (64 KiB) still applies. The bus's numbers are the authoritative measurement of what it received.
 
 ### 8.9 Idempotent companion insert
 
-The key is `(sender identity, recipient, envelope.record_id)`. If an sds-envelope row with this key is already on
+The key is `(sender identity, recipient, envelope.record_id)`, where `envelope.record_id` is the PARSED JSON string
+value. The JSON text of the frame does not matter: escapes (`"\u0073ha256:…"`), whitespace and member order give
+the same key, and a `record_id` merely quoted inside another record is not this key. If an sds-envelope row with this key is already on
 the bus, the server does NOT insert a second row: the existing id is returned in `accepted`, and
 `duplicates[] = {index, id, record_id}` says so. A sender that lost a reply MAY resend the same frame safely. A
 different recipient is a different key (legitimate fan-out). If the server cannot decide (lookup error), it inserts
