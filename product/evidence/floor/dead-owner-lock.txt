@@ -2,6 +2,6 @@ claim: A lock held by a process that is gone does not block the next owner.
 tests: test_bus_singleflight.py
 peer_written: False
 mutation: {"file": "bus_singleflight.py", "find": "        if owner_pid is not None and not self.is_alive(owner_pid):\n            return (\"owner-not-live\", {\"instance\": instance, \"pid\": owner_pid, \"pid_src\": \"owner\"})", "replace": "        pass  # MUTATION: a dead owner keeps the lock"}
-baseline rc=0 .............                                                            [100%] | 13 passed in 6.25s
-mutated  rc=1 FAILED test_bus_singleflight.py::OwnerNotLiveB1var2::test_live_panel_dead_owner_vs_live_panel_live_owner_never_double | 3 failed, 10 passed in 6.29s
+baseline rc=0 ---------------- generated xml file: /tmp/tmpij6kfwdl/floor.xml ---------------- | 13 passed in 10.57s
+mutated  rc=1 FAILED test_bus_singleflight.py::OwnerNotLiveB1var2::test_live_panel_dead_owner_vs_live_panel_live_owner_never_double | 3 failed, 10 passed in 15.04s
 status: OK (green with the guard; 3 test(s) decided against it without it)

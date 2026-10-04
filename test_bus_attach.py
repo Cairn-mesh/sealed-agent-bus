@@ -68,6 +68,14 @@ class AttachTest(unittest.TestCase):
         chunks = list(self.store.chunks(src, chunk_bytes=100000))
         import base64
         bad = dict(chunks[0], data=base64.b64encode(b"Y" * len(base64.b64decode(chunks[0]["data"]))).decode())
+        # sab-attach/1 §8.3: a served chunk carries `chunk_sha256` — the tamper is refused AT THE CHUNK (not written)
+        with self.assertRaises(ba.AttachmentError) as cm:
+            dst.receive_chunk(src, bad)
+        self.assertEqual(cm.exception.code, "chunk_hash_mismatch")
+        self.assertEqual(dst.status(src), {"state": "absent", "next_seq": 0})
+        # a client WITHOUT chunk hashes (the field is optional): the whole-file hash still catches it at the end
+        bad.pop("chunk_sha256")
+        chunks = [{k: v for k, v in c.items() if k != "chunk_sha256"} for c in chunks]
         dst.receive_chunk(src, bad)
         with self.assertRaises(ba.AttachmentError):
             for ch in chunks[1:]:

@@ -13,7 +13,7 @@ that has to be made deliberately in `agent_bus.py`.
 """
 from __future__ import annotations
 
-RELEASE_VERSION = "1.5.5"
+RELEASE_VERSION = "1.5.7"
 
 
 def same_line(release: str, protocol: str) -> bool:

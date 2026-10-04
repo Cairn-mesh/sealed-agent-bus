@@ -1,11 +1,11 @@
 {
  "counts": {
-  "first-party": 120,
+  "first-party": 122,
   "generated-here": 15,
   "joint-review-line": 22,
   "partner-same-business": 5,
   "third-party": 0,
-  "total": 162
+  "total": 164
  },
  "files": {
   ".github/workflows/tests.yml": "first-party",
@@ -85,6 +85,7 @@
   "test_agent_duty.py": "first-party",
   "test_agent_wake.py": "first-party",
   "test_attach_partial_stale_20260917.py": "first-party",
+  "test_attach_protocol_20261002.py": "first-party",
   "test_attach_quota_20260916.py": "first-party",
   "test_audit_cross_20260916.py": "first-party",
   "test_audit_cross_pairing_20260917.py": "first-party",
@@ -162,6 +163,7 @@
   "test_ssh_outbound_notary.py": "first-party",
   "test_ssh_sender_namespace_20260917.py": "first-party",
   "test_wake_markers_20260916.py": "first-party",
+  "tools/attach_protocol_mutants.py": "first-party",
   "tools/english_gate.py": "first-party",
   "tools/inbox_watch.sh": "first-party",
   "tools/inbox_watch_filtered_example.sh": "first-party",

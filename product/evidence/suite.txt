@@ -1,17 +1,17 @@
 runner: -m pytest -q -p no:cacheprovider
 
 first pass (against the previous envelope):
-........F...........F..........................FF.FF. [  7%]
-........................................................................ [ 17%]
+........................................................................ [  9%]
+........................................................................ [ 18%]
 ........................................................................ [ 27%]
 ........................................................................ [ 36%]
-................................................................ [ 45%]
-................................................................ [ 54%]
-................................xx............................. [ 63%]
-..................................................................... [ 72%]
-..............................................................................s................................... [ 88%]
-................................................... [ 95%]
-...................................                                      [100%]
+........................................................................ [ 45%]
+........................................................................ [ 54%]
+....xx.................................................................. [ 63%]
+........................................................................ [ 73%]
+......................................s................................. [ 82%]
+........................................................................ [ 91%]
+........................F...........F..........................FF.FF     [100%]
 =================================== FAILURES ===================================
 ____________ ShippedEnvelope.test_quick_verify_passes_on_this_tree _____________
 
@@ -26,7 +26,7 @@ self = <test_product_evidence.ShippedEnvelope testMethod=test_quick_verify_passe
 E       AssertionError: 'FAIL' != 'OK'
 E       - FAIL
 E       + OK
-E        : {'chapter': '1. integrity', 'status': 'FAIL', 'detail': 'AGENTBUS_README.md: content differs from the manifest; CHANGELOG.md: content differs from the manifest; abus: content differs from the manifest; agent_bus.py: content differs from the manifest; agent_bus_watcher.py: content differs from the manifest', 'problems': [{'file': 'AGENTBUS_README.md', 'problem': 'content differs from the manifest'}, {'file': 'CHANGELOG.md', 'problem': 'content differs from the manifest'}, {'file': 'abus', 'problem': 'content differs from the manifest'}, {'file': 'agent_bus.py', 'problem': 'content differs from the manifest'}, {'file': 'agent_bus_watcher.py', 'problem': 'content differs from the manifest'}, {'file': 'agent_duty.py', 'problem': 'content differs from the manifest'}, {'file': 'agent_wake.py', 'problem': 'content differs from the manifest'}, {'file': 'bus_attach.py', 'problem': 'content differs from the manifest'}, {'file': 'bus_enforce.py', 'problem': 'content differs from the manifest'}, {'file': 'bus_notary.py', 'problem': 'content differs from the manifest'}, {'file': 'bus_poke.py', 'problem': 'content differs from the manifest'}, {'file': 'bus_relay.py', 'problem': 'content differs from the manifest'}, {'file': 'bus_singleflight.py', 'problem': 'content differs from the manifest'}, {'file': 'bus_ssh_client.py', 'problem': 'content differs from the manifest'}, {'file': 'bus_ssh_enroll.py', 'problem': 'content differs from the manifest'}, {'file': 'bus_ssh_exchange.py', 'problem': 'content differs from the manifest'}, {'file': 'conftest.py', 'problem': 'content differs from the manifest'}, {'file': 'docs_bind_probe.py', 'problem': 'content differs from the manifest'}, {'file': 'requirements-ci.txt', 'problem': 'content differs from the manifest'}, {'file': 'sce_hook.py', 'problem': 'content differs from the manifest'}, {'file': 'sds_envelope.py', 'problem': 'content differs from the manifest'}, {'file': 'sweep_log_probe.py', 'problem': 'content differs from the manifest'}, {'file': 'test_agent_duty.py', 'problem': 'content differs from the manifest'}, {'file': 'test_agent_wake.py', 'problem': 'content differs from the manifest'}, {'file': 'test_attach_partial_stale_20260917.py', 'problem': 'content differs from the manifest'}, {'file': 'test_attach_quota_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_audit_cross_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_audit_cross_pairing_20260917.py', 'problem': 'content differs from the manifest'}, {'file': 'test_belepo_pont_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_belepo_pont_osztaly_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_bus_attach.py', 'problem': 'content differs from the manifest'}, {'file': 'test_bus_enforce.py', 'problem': 'content differs from the manifest'}, {'file': 'test_bus_notary.py', 'problem': 'content differs from the manifest'}, {'file': 'test_bus_poke_pin.py', 'problem': 'content differs from the manifest'}, {'file': 'test_bus_relay.py', 'problem': 'content differs from the manifest'}, {'file': 'test_bus_singleflight.py', 'problem': 'content differs from the manifest'}, {'file': 'test_bus_ssh.py', 'problem': 'content differs from the manifest'}, {'file': 'test_ci_closure_pin_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_claim_liveness_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_clamp_lied_with_audit_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_cursor_skips_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_duty_hardening_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_duty_waiting_stuck_20260917.py', 'problem': 'content differs from the manifest'}, {'file': 'test_enforce_marker_realpath_20260917.py', 'problem': 'content differs from the manifest'}, {'file': 'test_enforce_race_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_enroll_hardening_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_glm_attack_round_20260915.py', 'problem': 'content differs from the manifest'}, {'file': 'test_glm_round7_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_glm_round9_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_key_guard_symlink_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_label_parity.py', 'problem': 'content differs from the manifest'}, {'file': 'test_log_shape_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_nev_dimenzio_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_pending_truncated_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_poke_hardening_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_product_mode_deciders_agree.py', 'problem': 'content differs from the manifest'}, {'file': 'test_reason_optout_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_relay_archive_sse_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_round_close_anchor_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_runner_guard.py', 'problem': 'content differs from the manifest'}, {'file': 'test_sce_e2e.py', 'problem': 'content differs from the manifest'}, {'file': 'test_sce_hook.py', 'problem': 'content differs from the manifest'}, {'file': 'test_schema_doc_signed_shape.py', 'problem': 'content differs from the manifest'}, {'file': 'test_sds_envelope.py', 'problem': 'content differs from the manifest'}, {'file': 'test_sds_validator_bypass_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_signed_shape_interop.py', 'problem': 'content differs from the manifest'}, {'file': 'test_signing_entry_points_agree.py', 'problem': 'content differs from the manifest'}, {'file': 'test_silent_handlers_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_singleflight_clock_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_singleflight_pid_reuse_20260917.py', 'problem': 'content differs from the manifest'}, {'file': 'test_slice_anchor_20260916.py', 'problem': 'content differs from the manifest'}, {'file': 'test_ssh_client_signed_20260921.py', 'problem': 'content differs from the manifest'}, {'file': 'test_ssh_outbound_notary.py', 'problem': 'content differs from the manifest'}, {'file': 'test_ssh_sender_namespace_20260917.py', 'problem': 'content differs from the manifest'}, {'file': 'test_wake_markers_20260916.py', 'problem': 'content differs from the manifest'}, {'file': '.github/workflows/tests.yml', 'problem': 'content differs from the manifest'}, {'file': 'docs/AGENT_BUS_DESIGN.md', 'problem': 'content differs from the manifest'}, {'file': 'docs/AGENT_BUS_SCHEMA.md', 'problem': 'content differs from the manifest'}, {'file': 'docs/PROTOCOL_SLEEP_SAFE_MODE.md', 'problem': 'content differs from the manifest'}, {'file': 'docs/internal-hu/FEJLESZTES_v1.1.md', 'problem': 'not in the manifest'}, {'file': 'docs/internal-hu/FEJLESZTES_v1.2.md', 'problem': 'not in the manifest'}, {'file': 'docs/internal-hu/FEJLESZTES_v1.4.md', 'problem': 'not in the manifest'}, {'file': 'docs/internal-hu/FEJLESZTES_v1.5.md', 'problem': 'not in the manifest'}, {'file': 'docs/internal-hu/MERES_ketgepes_elo_20260916.md', 'problem': 'not in the manifest'}, {'file': 'docs/internal-hu/README.md', 'problem': 'not in the manifest'}, {'file': 'docs/internal-hu/TAMADASI_MATRIX_v1.5.md', 'problem': 'not in the manifest'}, {'file': 'product/claims.json', 'problem': 'content differs from the manifest'}, {'file': 'product/evidence.py', 'problem': 'content differs from the manifest'}, {'file': 'product/make_evidence.py', 'problem': 'content differs from the manifest'}, {'file': 'product/make_provenance.py', 'problem': 'content differs from the manifest'}, {'file': 'product/make_release_page.py', 'problem': 'content differs from the manifest'}, {'file': 'product/provenance.json', 'problem': 'content differs from the manifest'}, {'file': 'product/release_preflight.py', 'problem': 'content differs from the manifest'}, {'file': 'product/test_product_evidence.py', 'problem': 'content differs from the manifest'}, {'file': 'product/test_product_packaging.py', 'problem': 'content differs from the manifest'}, {'file': 'product/test_product_page.py', 'problem': 'content differs from the manifest'}, {'file': 'product/verify_evidence.py', 'problem': 'content differs from the manifest'}, {'file': 'product/version.py', 'problem': 'content differs from the manifest'}, {'file': 'tools/english_gate.py', 'problem': 'not in the manifest'}, {'file': 'tools/inbox_watch.sh', 'problem': 'content differs from the manifest'}, {'file': 'tools/inbox_watch_filtered_example.sh', 'problem': 'content differs from the manifest'}, {'file': 'tools/pr_gomb/README.md', 'problem': 'content differs from the manifest'}, {'file': 'tools/pr_gomb/crontab.example', 'problem': 'content differs from the manifest'}, {'file': 'tools/pr_gomb/pr_gomb.py', 'problem': 'content differs from the manifest'}, {'file': 'tools/pr_gomb/telegram_gomb_poll.py', 'problem': 'content differs from the manifest'}, {'file': 'docs/FEJLESZTES_v1.1.md', 'problem': 'missing'}, {'file': 'docs/FEJLESZTES_v1.2.md', 'problem': 'missing'}, {'file': 'docs/FEJLESZTES_v1.4.md', 'problem': 'missing'}, {'file': 'docs/FEJLESZTES_v1.5.md', 'problem': 'missing'}, {'file': 'docs/MERES_ketgepes_elo_20260916.md', 'problem': 'missing'}, {'file': 'docs/TAMADASI_MATRIX_v1.5.md', 'problem': 'missing'}], 'unsealed': ['README.md', 'SECURITY.md', 'assets/sab.png']}
+E        : {'chapter': '1. integrity', 'status': 'FAIL', 'detail': 'CHANGELOG.md: content differs from the manifest; agent_bus.py: content differs from the manifest; bus_attach.py: content differs from the manifest; bus_ssh_exchange.py: content differs from the manifest; sds_envelope.py: content differs from the manifest', 'problems': [{'file': 'CHANGELOG.md', 'problem': 'content differs from the manifest'}, {'file': 'agent_bus.py', 'problem': 'content differs from the manifest'}, {'file': 'bus_attach.py', 'problem': 'content differs from the manifest'}, {'file': 'bus_ssh_exchange.py', 'problem': 'content differs from the manifest'}, {'file': 'sds_envelope.py', 'problem': 'content differs from the manifest'}, {'file': 'test_attach_protocol_20261002.py', 'problem': 'not in the manifest'}, {'file': 'test_bus_attach.py', 'problem': 'content differs from the manifest'}, {'file': 'test_bus_ssh.py', 'problem': 'content differs from the manifest'}, {'file': 'docs/AGENT_BUS_SCHEMA.md', 'problem': 'content differs from the manifest'}, {'file': 'product/provenance.json', 'problem': 'content differs from the manifest'}, {'file': 'product/version.py', 'problem': 'content differs from the manifest'}, {'file': 'tools/attach_protocol_mutants.py', 'problem': 'not in the manifest'}], 'unsealed': ['README.md', 'SECURITY.md', 'assets/sab.png']}
 
 product/test_product_evidence.py:110: AssertionError
 _ ReleaseVersusProtocolVersion.test_the_declared_version_must_match_the_argument _
@@ -49,7 +49,7 @@ self = <test_product_page.ReleasePage testMethod=test_no_page_for_a_red_suite>
             p = self.gen(dist=dist, tree=copy)
             self.assertNotEqual(p.returncode, 0)
 >           self.assertIn("not green", p.stdout + p.stderr)
-E           AssertionError: 'not green' not found in 'the evidence envelope is for version 1.5.4, the artifact for 1.5.5\n'
+E           AssertionError: 'not green' not found in 'the evidence envelope is for version 1.5.5, the artifact for 1.5.7\n'
 
 product/test_product_page.py:83: AssertionError
 _ ReleasePage.test_no_page_when_the_envelope_does_not_describe_the_shipped_tree _
@@ -65,7 +65,7 @@ self = <test_product_page.ReleasePage testMethod=test_no_page_when_the_envelope_
             p = self.gen(dist=dist, tree=tree)
             self.assertNotEqual(p.returncode, 0)
 >           self.assertIn("does not describe the shipped tree", p.stdout + p.stderr)
-E           AssertionError: 'does not describe the shipped tree' not found in 'the evidence envelope is for version 1.5.4, the artifact for 1.5.5\n'
+E           AssertionError: 'does not describe the shipped tree' not found in 'the evidence envelope is for version 1.5.5, the artifact for 1.5.7\n'
 
 product/test_product_page.py:94: AssertionError
 _ ReleasePage.test_page_carries_the_artifact_identity_and_regenerates_identically _
@@ -78,7 +78,7 @@ self = <test_product_page.ReleasePage testMethod=test_page_carries_the_artifact_
         tree, dist = self.tree_with_suite("280 passed, 1 skipped in 34.68s", t.name)
         p = self.gen(dist=dist, tree=tree)
 >       self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-E       AssertionError: 1 != 0 : the evidence envelope is for version 1.5.4, the artifact for 1.5.5
+E       AssertionError: 1 != 0 : the evidence envelope is for version 1.5.5, the artifact for 1.5.7
 
 product/test_product_page.py:67: AssertionError
 _________ ReleasePage.test_the_published_page_carries_nothing_internal _________
@@ -102,19 +102,19 @@ FAILED product/test_product_page.py::ReleasePage::test_no_page_for_a_red_suite
 FAILED product/test_product_page.py::ReleasePage::test_no_page_when_the_envelope_does_not_describe_the_shipped_tree
 FAILED product/test_product_page.py::ReleasePage::test_page_carries_the_artifact_identity_and_regenerates_identically
 FAILED product/test_product_page.py::ReleasePage::test_the_published_page_carries_nothing_internal
-6 failed, 720 passed, 1 skipped, 2 xfailed, 98 subtests passed in 46.04s
+6 failed, 779 passed, 1 skipped, 2 xfailed in 78.00s (0:01:17)
 
 
 second pass (with the finished envelope):
-...................................................s. [  7%]
-........................................................................ [ 17%]
+........................................................................ [  9%]
+........................................................................ [ 18%]
 ........................................................................ [ 27%]
 ........................................................................ [ 36%]
-................................................................ [ 45%]
-................................................................ [ 54%]
-................................xx............................. [ 63%]
-..................................................................... [ 72%]
-..............................................................................s................................... [ 88%]
-................................................... [ 95%]
-...................................                                      [100%]
-725 passed, 2 skipped, 2 xfailed, 98 subtests passed in 45.66s
+........................................................................ [ 45%]
+........................................................................ [ 54%]
+....xx.................................................................. [ 63%]
+........................................................................ [ 73%]
+......................................s................................. [ 82%]
+........................................................................ [ 91%]
+...................................................................s     [100%]
+784 passed, 2 skipped, 2 xfailed in 102.84s (0:01:42)

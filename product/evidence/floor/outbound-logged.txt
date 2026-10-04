@@ -2,6 +2,6 @@ claim: Replies handed to a remote peer are recorded before hand-out.
 tests: test_peer_outbound_notary.py, test_ssh_outbound_notary.py
 peer_written: True
 mutation: {"file": "bus_ssh_exchange.py", "find": "            note(envelope=x, recipient=identity, kind=\"pickup\", decision=\"delivered\", reason=\"id=%s\" % rid,\n                 cursor=({\"id\": int(rid)} if isinstance(rid, int) and not isinstance(rid, bool) and rid >= 0 else None))", "replace": "            pass  # MUTATION: handed-out replies are not recorded"}
-baseline rc=0 ......................                                                   [100%] | 22 passed in 1.81s
-mutated  rc=1 FAILED test_ssh_outbound_notary.py::ClientReceiptsEndToEnd::test_receipts_reconcile_clean_then_flag_a_withheld_cursor_jump | 8 failed, 14 passed in 1.36s
+baseline rc=0 ---------------- generated xml file: /tmp/tmpgxigu4le/floor.xml ---------------- | 22 passed in 3.04s
+mutated  rc=1 FAILED test_ssh_outbound_notary.py::ClientReceiptsEndToEnd::test_receipts_reconcile_clean_then_flag_a_withheld_cursor_jump | 8 failed, 14 passed in 2.51s
 status: OK (green with the guard; 8 test(s) decided against it without it)

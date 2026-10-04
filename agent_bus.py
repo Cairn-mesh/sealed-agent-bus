@@ -677,6 +677,34 @@ def send(sender, recipient, body, *, topic="", kind="msg", thread_id=None, in_re
     return rid
 
 
+def find_sds_record(sender, recipient, record_id, db=None):
+    """The id of an EXISTING sds-envelope row from `sender` to `recipient` whose envelope carries `record_id`, else None.
+    The idempotency key of docs/AGENT_BUS_SCHEMA.md §8.9: (sender, recipient, envelope.record_id). EVERY sds-envelope
+    row of the pair is PARSED (by the same parser the insert path uses) and its envelope.record_id compared exactly:
+    the key is the parsed value, never the JSON text. No text pre-filter — the same record_id has many valid JSON
+    spellings (`"\u0073ha256:…"`), so a substring test on the stored body lets an escaped resend in as a new row; and
+    a record_id quoted inside another record's text is not a match either. Cost: linear in the pair's sds-envelope
+    rows. Read-only."""
+    import sds_envelope
+    if not (isinstance(record_id, str) and record_id.startswith("sha256:")):
+        return None
+    init(db)                                                  # a fresh bus has no `messages` table yet: that is "no row", not an error
+    c = _conn(db)
+    try:
+        rows = c.execute("SELECT id, body FROM messages WHERE sender=? AND recipient=? AND kind=? ORDER BY id",
+                         (sender, recipient, SDS_KIND)).fetchall()
+    finally:
+        c.close()
+    for r in rows:
+        try:
+            _rec, env = sds_envelope.parse_framed(r["body"])
+        except ValueError:
+            continue
+        if env.get("record_id") == record_id:
+            return int(r["id"])
+    return None
+
+
 def _sds_annotate(rows, *, strict=False, admission_path=None):
     """v1.1 (partner arm steps 2+3): for every sds-envelope row `sds` = valid | invalid(<reason>) | unsigned | unverifiable(<reason>).
     The sender's registry key (A2, root-guarded) and the local admission file bind the sender to the admitted issuer.

@@ -151,7 +151,10 @@ class ClientRoundTripTest(_Iso):
         res = cli.exchange("bus@example.invalid", "me", [{"to": "hub", "body": json.dumps(d), "kind": "attachment"}],
                            ssh_cmd=self._fake_ssh("remote1"), state_dir=os.path.join(self.tmp.name, "st"),
                            db=os.path.join(self.tmp.name, "l.db"), attach_descs=[d], attach_root=local_att.root)
-        self.assertEqual(res["attachments"], [{"sha256": d["sha256"], "status": "stored"}])
+        # sab-attach/1 (§8.5): the status item is ADDITIVE — it also carries the machine `code` and `next_seq`
+        self.assertEqual([{k: a[k] for k in ("sha256", "status")} for a in res["attachments"]],
+                         [{"sha256": d["sha256"], "status": "stored"}])
+        self.assertEqual(res["attachments"][0]["code"], "stored")
         self.assertEqual(bus_attach.Store(self.env["AGENT_BUS_ATTACH_DIR"]).get(d), data)
 
 

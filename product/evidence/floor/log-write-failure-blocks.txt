@@ -2,6 +2,6 @@ claim: If the notary log cannot be written, the boundary operation does not happ
 tests: test_peer_notary_failopen.py, test_ssh_outbound_notary.py
 peer_written: True
 mutation: {"file": "bus_ssh_exchange.py", "find": "            except Exception:\n                raise _NotaryWriteFailed(out)", "replace": "            except Exception:\n                return  # MUTATION: a failed log write no longer stops the operation"}
-baseline rc=0 ......................                                                   [100%] | 22 passed in 1.21s
-mutated  rc=1 FAILED test_ssh_outbound_notary.py::OutboundLogFirst::test_partial_failure_logs_before_hand_out_never_after | 6 failed, 16 passed in 1.27s
+baseline rc=0 ---------------- generated xml file: /tmp/tmpkk7rg2pw/floor.xml ---------------- | 22 passed in 2.55s
+mutated  rc=1 FAILED test_ssh_outbound_notary.py::OutboundLogFirst::test_partial_failure_logs_before_hand_out_never_after | 6 failed, 16 passed in 2.71s
 status: OK (green with the guard; 6 test(s) decided against it without it)

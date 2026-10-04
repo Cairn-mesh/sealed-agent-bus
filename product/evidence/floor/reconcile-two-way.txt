@@ -2,6 +2,6 @@ claim: Reconciliation checks the log against the peer's receipts too, so an inve
 tests: test_peer_reconcile_ack_forgery.py
 peer_written: True
 mutation: {"file": "bus_notary.py", "find": "        else:                                                    # ruled out (OSError not-sent) or nothing: hard accusation\n            disc.append({\"type\": \"ack_logged_not_sent\", \"ack\": a, \"logged\": n, \"sent\": sent_acks[a]})", "replace": "        else:\n            pass  # MUTATION: the log is no longer checked against the receipts"}
-baseline rc=0 ....                                                                     [100%] | 4 passed in 0.25s
-mutated  rc=1 FAILED test_peer_reconcile_ack_forgery.py::ReconcileOneWay::test_forged_ack_entry_must_not_hide_a_withheld_cursor_jump | 1 failed, 3 passed in 0.25s
+baseline rc=0 ---------------- generated xml file: /tmp/tmpj07l5fe_/floor.xml ---------------- | 4 passed in 0.51s
+mutated  rc=1 FAILED test_peer_reconcile_ack_forgery.py::ReconcileOneWay::test_forged_ack_entry_must_not_hide_a_withheld_cursor_jump | 1 failed, 3 passed in 0.57s
 status: OK (green with the guard; 1 test(s) decided against it without it)

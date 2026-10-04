@@ -2,6 +2,6 @@ claim: A cursor move (ack) is recorded before the cursor is moved.
 tests: test_peer_outbound_notary.py, test_ssh_outbound_notary.py
 peer_written: True
 mutation: {"file": "bus_ssh_exchange.py", "find": "        note(envelope={\"ack\": ack_to, \"cursor_from\": base, \"cursor_to\": tgt}, recipient=identity, kind=\"ack\",\n             decision=\"accepted\", reason=\"cursor %d->%d (ack %d)\" % (base, tgt, ack_to),\n             cursor={\"from\": base, \"to\": tgt, \"ack\": ack_to})", "replace": "        pass  # MUTATION: the cursor moves with no entry"}
-baseline rc=0 ......................                                                   [100%] | 22 passed in 1.81s
-mutated  rc=1 FAILED test_ssh_outbound_notary.py::ClientReceiptsEndToEnd::test_receipts_reconcile_clean_then_flag_a_withheld_cursor_jump | 6 failed, 16 passed in 1.63s
+baseline rc=0 ---------------- generated xml file: /tmp/tmpgxigu4le/floor.xml ---------------- | 22 passed in 3.04s
+mutated  rc=1 FAILED test_ssh_outbound_notary.py::ClientReceiptsEndToEnd::test_receipts_reconcile_clean_then_flag_a_withheld_cursor_jump | 6 failed, 16 passed in 2.92s
 status: OK (green with the guard; 6 test(s) decided against it without it)

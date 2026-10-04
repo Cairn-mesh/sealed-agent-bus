@@ -10,10 +10,17 @@ One SSH call = one atomic exchange round (stdin JSON → stdout JSON):
 
     in:  {"ack": <last stored reply id | 0>,
           "messages": [{"to", "body", "topic"?, "kind"?, "thread_id"?, "in_reply_to"?}, …],
-          "attachments": [{"descriptor": {…}, "chunks": [{"sha256","seq","last","data"}, …]}, …]}
-    out: {"identity", "protocol", "accepted": [bus-id…], "rejected": [{"index", "reason"}…],
-          "attachments": [{"sha256", "status": "stored|partial|rejected", "reason"?}…],
+          "attachments": [{"descriptor": {…}, "chunks": [{"sha256","seq","last","data","chunk_sha256"?}, …]}, …],
+          "fetch": [<descriptor> | {"descriptor": {…}, "from_seq": n}, …]}
+    out: {"identity", "protocol", "attach_protocol", "accepted": [bus-id…], "rejected": [{"index", "reason", "code"?}…],
+          "duplicates": [{"index", "id", "record_id"}…], "warnings": [{"index", "code", "reason"}…],
+          "sds": [{"index", "record_id", "frame_bytes", "canonical_body_bytes", "within_spec_limits"}…],
+          "attachments": [{"sha256", "status": "stored|partial|absent|rejected", "code", "next_seq"?, "reason"?}…],
+          "fetched": [{"sha256", "status", "code", "chunks"?, "from_seq"?, "next_seq"?, "total_chunks"?}…],
           "replies": [{"id","ts","sender","topic","kind","thread_id","in_reply_to","body","sds"?}…]}
+
+The NORMATIVE text of this exchange (processing order, chunk/fetch/status/companion-record rules, idempotency,
+the in_reply_to field, the SPEC §4 limits) is docs/AGENT_BUS_SCHEMA.md §8 — this docstring is only a summary.
 
 Security boundary:
 - **The identity comes from the force-command ARGUMENT** (bound to the key), NEVER from the payload: the
@@ -43,9 +50,41 @@ MAX_REPLIES = 200
 # DOWNLOAD (fetch) ceilings: one exchange round returns this many attachment bytes; a larger one must be requested in a separate,
 # dedicated round. The download comes from the content-addressed store (the sha256 is the capability: whoever received the
 # descriptor in a message addressed to them can pull it). The env can only NARROW (as with bus_enforce).
+#: §8.6, the codes outside the attachment/fetch items: `rejected[].code` of a message (§8.7–§8.10; `bad_descriptor` is
+#: shared with bus_attach.CODES) and `warnings[].code`. With bus_attach.CODES they are the WHOLE closed set of §8.6.
+COMPANION_CODES = ("attachment_not_stored", "limit_raw_bytes", "limit_bytes", "in_reply_to_mismatch", "idem_unknown",
+                   "bad_descriptor")
+WARNING_CODES = ("in_reply_to_inner_only",)
 MAX_FETCH_ITEMS = 32
 MAX_FETCH_BYTES = min(4 * 1024 * 1024, int(os.environ.get("AGENT_BUS_SSH_FETCH_MAX_BYTES", str(4 * 1024 * 1024))))
 _REPLY_KEYS = ("id", "ts", "sender", "topic", "kind", "thread_id", "in_reply_to", "body", "sds")
+#: the attachment-protocol revision of docs/AGENT_BUS_SCHEMA.md §8 (independent of the bus PROTOCOL_VERSION).
+ATTACH_PROTOCOL = "sab-attach/1"
+
+
+def _idem_lock(db):
+    """An exclusive file lock around (lookup -> insert) of an sds-envelope row, so two concurrent rounds of the same
+    sender cannot BOTH miss each other's row and insert the same record twice (§8.9). Lock file next to the DB."""
+    import fcntl
+    import agent_bus as ab
+    path = (db or ab._db_path()) + ".sds-idem.lock"
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o660)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
+
+
+def _idem_unlock(fd):
+    import fcntl
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
+def _inner_reply(rec):
+    v = rec.get("in_reply_to") if isinstance(rec, dict) else None
+    return v if isinstance(v, int) and not isinstance(v, bool) else None
 
 
 _FROM_ENV = object()
@@ -94,8 +133,11 @@ def _exchange(identity, raw, *, db, attach_root, notary):
         raw = raw.decode("utf-8", "replace")
     elif len(raw.encode("utf-8", "surrogatepass")) > MAX_BYTES:
         return {"identity": identity, "error": "oversize", "processed": False}
-    out = {"identity": identity, "protocol": ab.PROTOCOL_VERSION, "accepted": [], "rejected": [],
+    out = {"identity": identity, "protocol": ab.PROTOCOL_VERSION, "attach_protocol": ATTACH_PROTOCOL,
+           "accepted": [], "rejected": [], "duplicates": [], "warnings": [], "sds": [],
            "attachments": [], "fetched": [], "replies": []}
+    import sds_envelope
+    store = bus_attach.Store(attach_root)
     payload = {}
     if raw.strip():
         try:
@@ -150,20 +192,92 @@ def _exchange(identity, raw, *, db, attach_root, notary):
             note(envelope=m, recipient=m["to"], kind=kind, decision="rejected", reason="unsigned-pinned",
                  claimed_ts=claimed)
             continue
-        note(envelope=m, recipient=m["to"], kind=kind, decision="accepted", claimed_ts=claimed)
-        try:                                                   # ANTI-SPOOF: the sender is ALWAYS the pinned identity
-            rid = ab.send(identity, m["to"], m["body"], topic=ab.canonical_text_field(m.get("topic")),
-                          kind=kind, thread_id=m.get("thread_id"),
-                          in_reply_to=m.get("in_reply_to"), db=db, sign_key=False,   # False = NO auto-sign either
-                          presigned=presigned)
-        except Exception as e:                                 # noqa: BLE001 — any send error: not delivered, and that shows
-            out["rejected"].append({"index": i, "reason": str(e)[:200]})
-            note(envelope=m, recipient=m["to"], kind=kind, decision="rejected", reason="send_failed",
-                 claimed_ts=claimed)
-            continue
+        # §8.7–§8.10 — the sds-envelope rules of the exchange. A malformed frame is left to ab.send (its own reason).
+        rec_id, idem_fd = None, None
+        if kind == ab.SDS_KIND:
+            try:
+                rec, env = sds_envelope.parse_framed(m["body"])
+            except ValueError:
+                rec = env = None
+            if env is not None:
+                rec_id = env["record_id"]
+                lim = sds_envelope.spec_limits(m["body"])
+                out["sds"].append(dict({"index": i, "record_id": rec_id}, **lim))
+                bad = None
+                # §8.10 in_reply_to: the bus threads on the OUTER row field (it is in the signed shape); the record's
+                # own in_reply_to is record CONTENT the bus never reads. Two different values = an ambiguous message.
+                outer, inner = m.get("in_reply_to"), _inner_reply(rec)
+                if isinstance(outer, str) and outer.strip().lstrip("-").isdigit():
+                    outer = int(outer)                         # the bus stores it as an integer (ab.send converts too);
+                                                               # anything else is left as is: ab.send rejects it with its own reason
+                if outer is not None and inner is not None and outer != inner:
+                    bad = ("in_reply_to_mismatch", "outer in_reply_to %r != record in_reply_to %r" % (outer, inner))
+                try:
+                    att = sds_envelope.attachment_descriptor_of(rec)
+                except ValueError as e:
+                    att, bad = None, bad or ("bad_descriptor", str(e)[:200])
+                if att is not None and bad is None:
+                    # §8.8 the companion record: SPEC §4 limits ENFORCED, and "a reference is not a hand-over" — the
+                    # described bytes must already be STORED (checked) here, in an EARLIER round (§8.2 order).
+                    if lim["frame_bytes"] > sds_envelope.SPEC_MAX_RAW_BYTES:
+                        bad = ("limit_raw_bytes", "frame %d B > %d" % (lim["frame_bytes"], sds_envelope.SPEC_MAX_RAW_BYTES))
+                    elif lim["canonical_body_bytes"] > sds_envelope.SPEC_MAX_BYTES:
+                        bad = ("limit_bytes", "canonical_body %d B > %d" % (lim["canonical_body_bytes"],
+                                                                         sds_envelope.SPEC_MAX_BYTES))
+                    else:
+                        # the stored BYTES are read and compared with the descriptor (size + sha256). A file that
+                        # merely exists under that hash — shorter, longer or changed on disk — is not a hand-over.
+                        try:
+                            store.verify(att)
+                        except bus_attach.AttachmentError as e:
+                            bad = ("attachment_not_stored",
+                                   "the described bytes are not stored on this bus yet (send the chunks first, the "
+                                   "record in a later round)" if e.code == "not_found" else
+                                   "the bytes stored on this bus do not match the descriptor (%s)" % e.code)
+                if bad is not None:
+                    out["rejected"].append({"index": i, "reason": bad[1], "code": bad[0]})
+                    note(envelope=m, recipient=m["to"], kind=kind, decision="rejected", reason=bad[0],
+                         claimed_ts=claimed)
+                    continue
+                if outer is None and inner is not None:
+                    out["warnings"].append({"index": i, "code": "in_reply_to_inner_only",
+                                            "reason": "record in_reply_to=%d is not threaded by the bus; set the "
+                                                      "outer in_reply_to too (§8.10)" % inner})
+                # §8.9 IDEMPOTENT insert: (sender, recipient, envelope.record_id) already on the bus -> the EXISTING id,
+                # no second row. A lost reply + resend therefore cannot duplicate the record.
+                idem_fd = _idem_lock(db)
+                try:
+                    dup = ab.find_sds_record(identity, m["to"], rec_id, db=db)
+                except Exception:                              # noqa: BLE001 — cannot decide -> no insert (fail-closed)
+                    _idem_unlock(idem_fd)
+                    out["rejected"].append({"index": i, "reason": "idempotency lookup failed", "code": "idem_unknown"})
+                    note(envelope=m, recipient=m["to"], kind=kind, decision="rejected", reason="idem_unknown",
+                         claimed_ts=claimed)
+                    continue
+                if dup is not None:
+                    _idem_unlock(idem_fd)
+                    note(envelope=m, recipient=m["to"], kind=kind, decision="accepted", reason="duplicate_record_id",
+                         claimed_ts=claimed)
+                    out["duplicates"].append({"index": i, "id": dup, "record_id": rec_id})
+                    out["accepted"].append(dup)
+                    continue
+        try:
+            note(envelope=m, recipient=m["to"], kind=kind, decision="accepted", claimed_ts=claimed)
+            try:                                               # ANTI-SPOOF: the sender is ALWAYS the pinned identity
+                rid = ab.send(identity, m["to"], m["body"], topic=ab.canonical_text_field(m.get("topic")),
+                              kind=kind, thread_id=m.get("thread_id"),
+                              in_reply_to=m.get("in_reply_to"), db=db, sign_key=False,   # False = NO auto-sign either
+                              presigned=presigned)
+            except Exception as e:                             # noqa: BLE001 — any send error: not delivered, and that shows
+                out["rejected"].append({"index": i, "reason": str(e)[:200]})
+                note(envelope=m, recipient=m["to"], kind=kind, decision="rejected", reason="send_failed",
+                     claimed_ts=claimed)
+                continue
+        finally:
+            if idem_fd is not None:
+                _idem_unlock(idem_fd)
         out["accepted"].append(rid)
 
-    store = bus_attach.Store(attach_root)
     for a in payload.get("attachments") or []:
         desc = (a or {}).get("descriptor") if isinstance(a, dict) else None
         sha = desc.get("sha256") if isinstance(desc, dict) else None
@@ -174,48 +288,102 @@ def _exchange(identity, raw, *, db, attach_root, notary):
             if not isinstance(chunks, list):
                 raise TypeError("chunks must be a list")
         except (bus_attach.AttachmentError, AttributeError, TypeError) as e:
-            out["attachments"].append({"sha256": sha, "status": "rejected", "reason": str(e)[:200]})
+            out["attachments"].append({"sha256": sha, "status": "rejected", "code": getattr(e, "code", "bad_descriptor"),
+                                       "reason": str(e)[:200]})
             note(envelope=env, recipient="", kind="attachment", decision="rejected", reason=str(e)[:200])
             continue
         # LOG-FIRST on the attachment branch too: writing to the store (partial or complete) happens only after the entry.
-        note(envelope=env, recipient="", kind="attachment", decision="accepted", reason="received")
+        # §8.5: an item with NO chunks is a pure STATUS query (nothing is written) -> no log entry needed.
+        if chunks:
+            note(envelope=env, recipient="", kind="attachment", decision="accepted", reason="received")
+        err = None
         try:
-            done = None
             for ch in chunks:
-                done = store.receive_chunk(desc, ch)
+                store.receive_chunk(desc, ch)
         except Exception as e:                                 # noqa: BLE001 — not stored: a second, correcting entry
-            out["attachments"].append({"sha256": sha, "status": "rejected", "reason": str(e)[:200]})
+            err = e
             note(envelope=env, recipient="", kind="attachment", decision="rejected", reason="store_failed")
-            continue
-        out["attachments"].append({"sha256": sha, "status": "stored" if done else "partial"})
+        # §8.5: the MACHINE state after this round, always — the client resumes at `next_seq`, never guesses.
+        try:
+            st = store.status(desc)
+        except bus_attach.AttachmentError as e:                # the descriptor's size is not the stored length: the
+            st = {"state": "absent", "next_seq": 0}            # DESCRIBED bytes are not here, and the item says why
+            err = err or e
+        if err is not None:
+            out["attachments"].append({"sha256": sha, "status": "rejected", "code": getattr(err, "code", "attachment_error"),
+                                       "next_seq": st["next_seq"], "state": st["state"], "reason": str(err)[:200]})
+        else:
+            out["attachments"].append({"sha256": sha, "status": st["state"], "code": st["state"],
+                                       "next_seq": st["next_seq"]})
 
     # DOWNLOAD (fetch): the client requests descriptors, we return the chunks from the content-addressed store.
     # This is the missing receiving side + the download direction of "the bus also carries packages". get() checks byte-exactly
     # (size+sha256, fail-closed). Per-round ceiling: MAX_FETCH_ITEMS items and MAX_FETCH_BYTES total bytes; a large one in a separate round.
     fetched_bytes = 0
-    for desc in (payload.get("fetch") or [])[:MAX_FETCH_ITEMS]:
+    for item in (payload.get("fetch") or [])[:MAX_FETCH_ITEMS]:
+        # §8.4: an item is a bare descriptor (legacy: the WHOLE attachment in one round, or `deferred`) or a RANGED
+        # request {"descriptor", "from_seq"}: as many whole chunks from `from_seq` as fit the round budget, plus the
+        # machine `next_seq` / `total_chunks` — so an attachment of ANY size (up to MAX_ATTACHMENT) can be pulled.
+        ranged = isinstance(item, dict) and "descriptor" in item
+        desc = item.get("descriptor") if ranged else item
         sha = desc.get("sha256") if isinstance(desc, dict) else None
         env = desc if isinstance(desc, dict) else {}
         try:
-            bus_attach.check_descriptor(desc)                  # tisztan alaki
+            bus_attach.check_descriptor(desc)                  # purely formal
+            if ranged and set(item) != {"descriptor", "from_seq"}:
+                raise bus_attach.AttachmentError("ranged fetch takes exactly descriptor, from_seq", "bad_range")
+            from_seq = item["from_seq"] if ranged else 0
+            if isinstance(from_seq, bool) or not isinstance(from_seq, int):
+                raise bus_attach.AttachmentError("from_seq must be an integer", "bad_range")
         except (bus_attach.AttachmentError, AttributeError, TypeError) as e:
-            out["fetched"].append({"sha256": sha, "status": "rejected", "reason": str(e)[:200]})
+            out["fetched"].append({"sha256": sha, "status": "rejected", "code": getattr(e, "code", "bad_descriptor"),
+                                   "reason": str(e)[:200]})
             note(envelope=env, recipient=identity, kind="fetch", decision="rejected", reason=str(e)[:200])
             continue
-        size = desc.get("size") if isinstance(desc.get("size"), int) else 0
-        if fetched_bytes + size > MAX_FETCH_BYTES:             # a large one must be requested in a dedicated round (not silent truncation)
-            out["fetched"].append({"sha256": sha, "status": "deferred", "reason": "round-fetch-budget"})
-            note(envelope=env, recipient=identity, kind="fetch", decision="rejected", reason="round-budget")
-            continue
+        size = desc["size"]
+        total = store.chunk_count(desc)
+        budget = MAX_FETCH_BYTES - fetched_bytes
+        if ranged:
+            if not (0 <= from_seq < total):
+                out["fetched"].append({"sha256": sha, "status": "rejected", "code": "bad_range", "total_chunks": total,
+                                       "reason": "from_seq out of range [0, %d)" % total})
+                note(envelope=env, recipient=identity, kind="fetch", decision="rejected", reason="bad_range")
+                continue
+            # whole chunks that fit; the LAST chunk may be short, so count its real length
+            k, used = 0, 0
+            while from_seq + k < total:
+                seq = from_seq + k
+                ln = min(bus_attach.CHUNK_BYTES, size - seq * bus_attach.CHUNK_BYTES)
+                if used + ln > budget:
+                    break
+                k, used = k + 1, used + ln
+            if k == 0:
+                out["fetched"].append({"sha256": sha, "status": "deferred", "code": "round_fetch_budget",
+                                       "next_seq": from_seq, "total_chunks": total, "reason": "round-fetch-budget"})
+                note(envelope=env, recipient=identity, kind="fetch", decision="rejected", reason="round-budget")
+                continue
+        else:
+            if fetched_bytes + size > MAX_FETCH_BYTES:         # a large one: ranged fetch (not silent truncation)
+                out["fetched"].append({"sha256": sha, "status": "deferred", "code": "round_fetch_budget",
+                                       "next_seq": 0, "total_chunks": total,
+                                       "reason": "round-fetch-budget; use a ranged fetch {descriptor, from_seq} (§8.4)"})
+                note(envelope=env, recipient=identity, kind="fetch", decision="rejected", reason="round-budget")
+                continue
+            k, used = total, size
         note(envelope=env, recipient=identity, kind="fetch", decision="accepted", reason="requested")
         try:
-            chunks = list(store.chunks(desc))                  # get() checks byte-exactly (size+sha256) -> not stored = AttachmentError
+            chunks = list(store.chunks(desc, from_seq=from_seq, max_chunks=k))   # whole file checked first (fail-closed)
         except bus_attach.AttachmentError as e:                # not in the store / differs -> not found (fail-closed)
-            out["fetched"].append({"sha256": sha, "status": "not-found", "reason": str(e)[:200]})
+            code = e.code if e.code in ("hash_mismatch", "size_mismatch") else "not_found"
+            out["fetched"].append({"sha256": sha, "status": "not-found", "code": code, "reason": str(e)[:200]})
             note(envelope=env, recipient=identity, kind="fetch", decision="rejected", reason="not-found")
             continue
-        fetched_bytes += size
-        out["fetched"].append({"sha256": sha, "descriptor": desc, "chunks": chunks, "status": "delivered"})
+        fetched_bytes += used
+        nxt = from_seq + len(chunks)
+        out["fetched"].append({"sha256": sha, "descriptor": desc, "chunks": chunks,
+                               "status": "delivered" if nxt == total else "partial",
+                               "code": "delivered" if nxt == total else "partial",
+                               "from_seq": from_seq, "next_seq": nxt, "total_chunks": total})
 
     rows = ab.recv(identity, mark=False, limit=MAX_REPLIES, db=db, verify_sds=True)
     _PEND_LIMIT = MAX_REPLIES * 50

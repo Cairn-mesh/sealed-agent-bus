@@ -2,6 +2,6 @@ claim: An inbound message is recorded in the notary log before it is inserted in
 tests: test_peer_notary_failopen.py
 peer_written: True
 mutation: {"file": "bus_ssh_exchange.py", "find": "        note(envelope=m, recipient=m[\"to\"], kind=kind, decision=\"accepted\", claimed_ts=claimed)", "replace": "        pass  # MUTATION: no entry before the bus insert"}
-baseline rc=0 ....                                                                     [100%] | 4 passed in 0.13s
-mutated  rc=1 FAILED test_peer_notary_failopen.py::MateNotaryFailOpen::test_write_failure_does_not_deliver_unnotarized_mail | 4 failed in 0.18s
+baseline rc=0 ---------------- generated xml file: /tmp/tmp27hq0e4o/floor.xml ---------------- | 4 passed in 0.42s
+mutated  rc=1 FAILED test_peer_notary_failopen.py::MateNotaryFailOpen::test_write_failure_does_not_deliver_unnotarized_mail | 4 failed in 0.46s
 status: OK (green with the guard; 4 test(s) decided against it without it)
