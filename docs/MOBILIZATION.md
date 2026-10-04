@@ -40,3 +40,14 @@ Release gate for the bus: a mobilization round trip in both directions — `wake
 - Shared: this P1 table in the bus contract and in the per-project instructions.
 
 Measured first: the ack time of the next cross-side task after this document lands.
+
+## Precisions agreed with the Kalel side (2026-10-04, PR review)
+
+1. **The ack record.** Until the notary knows `kind=ack`, the ack travels as `kind=note`, topic `ACK <id>`, `in_reply_to=<id>`, body `{"v":0,"ack":<id>,"status":"injected|accepted|working|done|declined","by":"watcher|orchestrator","kind":"task","at":"<ISO>"}`. Same body under `kind=ack` once the notary learns it.
+2. **The 10 minutes** are measured as `ack.ts - item.ts` on the notary's timestamps, never on local clocks.
+3. **P2 hygiene.** Dedup per item id; a per-hour ack cap (10); a switch file; every suppressed ack is logged. A replayed inbox must not produce an ack storm.
+4. **P4 fields.** `last_processed_id` = the highest `task|question|wake` id that has our `in_reply_to` reply; `wall_pending` = items older than 10 minutes without ack or answer, reported as count + oldest id + age; `last_run_rc` = the processing round's exit code. Alarm when `wall_pending > 0` and the oldest is >= 30 minutes, even if the console trace is fresh.
+5. **P5 shape.** One `console-down` report per state change (dedup) and a `console-up` report when the trace is fresh again; the pane guard never writes into the orchestrator's input pane except through the agreed injector.
+6. **Escalation.** Telegram to both operators; carries item id + age; at most one escalation per item per 15 minutes; a second escalation when `accepted|working` is missing at 60 minutes.
+
+Measured so far: first cross-side task (#15171) acked manually in ~30 min; the next (#15201) acked automatically in ~15 s by the Kalel watcher (#15203). P2 is live on the Kalel side.
