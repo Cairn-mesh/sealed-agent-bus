@@ -1,8 +1,16 @@
-## [Unreleased] — sab-attach/1: the attachment exchange protocol, written down and closed
+## [1.5.7] — 2026-10-04 — sab-attach/1: the attachment exchange protocol, written down and closed
 
-Answers the eleven questions a partner's attachment client raised against the exchange at `eb56c5e`. `PROTOCOL_VERSION`
-stays 1.5.0, `SCHEMA_VERSION` 1.0.0; every change is ADDITIVE for an old client. The evidence envelope is NOT resealed
-here: a reseal names a new `RELEASE_VERSION`, which is the release owner's decision.
+Answers the eleven questions a partner's attachment client raised against the exchange at `eb56c5e`, and the five
+findings of the review of the first draft. `PROTOCOL_VERSION` stays 1.5.0, `SCHEMA_VERSION` 1.0.0. The release number
+goes from 1.5.5 to 1.5.7 (1.5.6 is taken on another line). The evidence envelope is resealed as 1.5.7, so it
+describes the tree shipped here.
+
+The changes are additive for an old client, with three deliberate exceptions where the server is now STRICTER than
+`eb56c5e` (fail-closed; each is normative in §8):
+- an upload chunk must carry an integer `seq` and a boolean `last` (§8.3) — a chunk without them is `bad_chunk`;
+- a ranged fetch request must carry `from_seq` (§8.4) — `{"descriptor": …}` alone is `bad_range`;
+- a descriptor whose `size` is not the stored length is never reported `stored` and never accepted as a hand-over
+  (§8.5, §8.8) — `size_mismatch` / `attachment_not_stored`.
 
 - **Normative text:** `docs/AGENT_BUS_SCHEMA.md` §8 — round processing order (ack → messages → attachments → fetch →
   replies), descriptor and chunk objects, fetch, upload status, a closed table of machine codes, the companion record,
