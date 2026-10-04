@@ -2,6 +2,6 @@ claim: The notary log holds hashes and metadata only: never a message body, neve
 tests: test_bus_notary.py
 peer_written: False
 mutation: {"file": "bus_notary.py", "find": "                e = {\"seq\": seq + 1, \"prev_hash\": head, \"received_at_ms\": int(self.clock()), \"envelope_sha256\": env_sha,", "replace": "                e = {\"seq\": seq + 1, \"prev_hash\": head, \"received_at_ms\": int(self.clock()), \"envelope_sha256\": env_sha, \"plaintext\": repr(envelope)[:400],  # MUTATION: content in the log"}
-baseline rc=0 ...................................                                      [100%] | 35 passed in 0.98s
-mutated  rc=1 FAILED test_bus_notary.py::NotaryIntegrationTest::test_ssh_exchange_one_entry_per_item_hash_only | 2 failed, 33 passed in 0.99s
+baseline rc=0 ---------------- generated xml file: /tmp/tmpmk32jri7/floor.xml ---------------- | 35 passed in 1.83s
+mutated  rc=1 FAILED test_bus_notary.py::NotaryIntegrationTest::test_ssh_exchange_one_entry_per_item_hash_only | 2 failed, 33 passed in 2.21s
 status: OK (green with the guard; 2 test(s) decided against it without it)

@@ -7,7 +7,7 @@
   "verify": "python3 bus_notary.py verify product/evidence/notary/chain.jsonl --pub $(cat product/evidence/notary/PUBKEY.txt)"
  },
  "floor_note": "Every claim ships with a guard-off mutation and the tests that MUST go red because of it. A claim whose tests stay green with its guard removed is a silent green and fails the floor. Tests marked peer_written were written by the reviewing party, not by us, and are shipped verbatim.",
- "measured_utc": "2026-09-26T04:54:50Z",
+ "measured_utc": "2026-10-04T08:20:31Z",
  "notary_probes": [
   {
    "detail": "ok=True trusted=True",
@@ -80,12 +80,12 @@
   {
    "baseline_rc": 0,
    "baseline_red": 0,
-   "baseline_tail": "....                                                                     [100%] | 4 passed in 0.13s",
+   "baseline_tail": "---------------- generated xml file: /tmp/tmp27hq0e4o/floor.xml ---------------- | 4 passed in 0.42s",
    "claim": "An inbound message is recorded in the notary log before it is inserted into the bus.",
    "id": "inbound-log-first",
    "mutant_red": 4,
    "mutated_rc": 1,
-   "mutated_tail": "FAILED test_peer_notary_failopen.py::MateNotaryFailOpen::test_write_failure_does_not_deliver_unnotarized_mail | 4 failed in 0.18s",
+   "mutated_tail": "FAILED test_peer_notary_failopen.py::MateNotaryFailOpen::test_write_failure_does_not_deliver_unnotarized_mail | 4 failed in 0.46s",
    "newly_red": [
     "test_peer_notary_failopen.MateNotaryFailOpen::test_client_retry_does_not_amplify_unnotarized_delivery",
     "test_peer_notary_failopen.MateNotaryFailOpen::test_omission_leaves_a_visible_gap_in_the_log",
@@ -109,12 +109,12 @@
   {
    "baseline_rc": 0,
    "baseline_red": 0,
-   "baseline_tail": "......................                                                   [100%] | 22 passed in 1.21s",
+   "baseline_tail": "---------------- generated xml file: /tmp/tmpkk7rg2pw/floor.xml ---------------- | 22 passed in 2.55s",
    "claim": "If the notary log cannot be written, the boundary operation does not happen (fail-closed).",
    "id": "log-write-failure-blocks",
    "mutant_red": 6,
    "mutated_rc": 1,
-   "mutated_tail": "FAILED test_ssh_outbound_notary.py::OutboundLogFirst::test_partial_failure_logs_before_hand_out_never_after | 6 failed, 16 passed in 1.27s",
+   "mutated_tail": "FAILED test_ssh_outbound_notary.py::OutboundLogFirst::test_partial_failure_logs_before_hand_out_never_after | 6 failed, 16 passed in 2.71s",
    "newly_red": [
     "test_peer_notary_failopen.MateNotaryFailOpen::test_client_retry_does_not_amplify_unnotarized_delivery",
     "test_peer_notary_failopen.MateNotaryFailOpen::test_omission_leaves_a_visible_gap_in_the_log",
@@ -143,12 +143,12 @@
   {
    "baseline_rc": 0,
    "baseline_red": 0,
-   "baseline_tail": "......................                                                   [100%] | 22 passed in 1.81s",
+   "baseline_tail": "---------------- generated xml file: /tmp/tmpgxigu4le/floor.xml ---------------- | 22 passed in 3.04s",
    "claim": "Replies handed to a remote peer are recorded before hand-out.",
    "id": "outbound-logged",
    "mutant_red": 8,
    "mutated_rc": 1,
-   "mutated_tail": "FAILED test_ssh_outbound_notary.py::ClientReceiptsEndToEnd::test_receipts_reconcile_clean_then_flag_a_withheld_cursor_jump | 8 failed, 14 passed in 1.36s",
+   "mutated_tail": "FAILED test_ssh_outbound_notary.py::ClientReceiptsEndToEnd::test_receipts_reconcile_clean_then_flag_a_withheld_cursor_jump | 8 failed, 14 passed in 2.51s",
    "newly_red": [
     "test_ssh_outbound_notary.ClientReceiptsEndToEnd::test_receipts_reconcile_clean_then_flag_a_withheld_cursor_jump",
     "test_ssh_outbound_notary.OutboundLogFirst::test_partial_failure_logs_before_hand_out_never_after",
@@ -181,12 +181,12 @@
   {
    "baseline_rc": 0,
    "baseline_red": 0,
-   "baseline_tail": "......................                                                   [100%] | 22 passed in 1.81s",
+   "baseline_tail": "---------------- generated xml file: /tmp/tmpgxigu4le/floor.xml ---------------- | 22 passed in 3.04s",
    "claim": "A cursor move (ack) is recorded before the cursor is moved.",
    "id": "cursor-move-logged",
    "mutant_red": 6,
    "mutated_rc": 1,
-   "mutated_tail": "FAILED test_ssh_outbound_notary.py::ClientReceiptsEndToEnd::test_receipts_reconcile_clean_then_flag_a_withheld_cursor_jump | 6 failed, 16 passed in 1.63s",
+   "mutated_tail": "FAILED test_ssh_outbound_notary.py::ClientReceiptsEndToEnd::test_receipts_reconcile_clean_then_flag_a_withheld_cursor_jump | 6 failed, 16 passed in 2.92s",
    "newly_red": [
     "test_ssh_outbound_notary.ClientReceiptsEndToEnd::test_receipts_reconcile_clean_then_flag_a_withheld_cursor_jump",
     "test_ssh_outbound_notary.OutboundLogFirst::test_ack_failure_after_logging_adds_a_rejected_entry",
@@ -215,12 +215,12 @@
   {
    "baseline_rc": 0,
    "baseline_red": 0,
-   "baseline_tail": "....                                                                     [100%] | 4 passed in 0.25s",
+   "baseline_tail": "---------------- generated xml file: /tmp/tmpj07l5fe_/floor.xml ---------------- | 4 passed in 0.51s",
    "claim": "Reconciliation checks the log against the peer's receipts too, so an invented entry cannot cover a loss.",
    "id": "reconcile-two-way",
    "mutant_red": 1,
    "mutated_rc": 1,
-   "mutated_tail": "FAILED test_peer_reconcile_ack_forgery.py::ReconcileOneWay::test_forged_ack_entry_must_not_hide_a_withheld_cursor_jump | 1 failed, 3 passed in 0.25s",
+   "mutated_tail": "FAILED test_peer_reconcile_ack_forgery.py::ReconcileOneWay::test_forged_ack_entry_must_not_hide_a_withheld_cursor_jump | 1 failed, 3 passed in 0.57s",
    "newly_red": [
     "test_peer_reconcile_ack_forgery.ReconcileOneWay::test_forged_ack_entry_must_not_hide_a_withheld_cursor_jump"
    ],
@@ -238,12 +238,12 @@
   {
    "baseline_rc": 0,
    "baseline_red": 0,
-   "baseline_tail": ".....                                                                    [100%] | 5 passed in 0.18s",
+   "baseline_tail": "---------------- generated xml file: /tmp/tmp3u_d6o_p/floor.xml ---------------- | 5 passed in 0.47s",
    "claim": "A logged cursor target beyond max(previous cursor, acknowledged id) is reported.",
    "id": "cursor-target-bound",
    "mutant_red": 1,
    "mutated_rc": 1,
-   "mutated_tail": "FAILED test_peer_reconcile_cursor_target.py::CursorTargetUnbound::test_cursor_target_beyond_acked_is_reported | 1 failed, 4 passed in 0.19s",
+   "mutated_tail": "FAILED test_peer_reconcile_cursor_target.py::CursorTargetUnbound::test_cursor_target_beyond_acked_is_reported | 1 failed, 4 passed in 0.46s",
    "newly_red": [
     "test_peer_reconcile_cursor_target.CursorTargetUnbound::test_cursor_target_beyond_acked_is_reported"
    ],
@@ -261,12 +261,12 @@
   {
    "baseline_rc": 0,
    "baseline_red": 0,
-   "baseline_tail": ".................................                                        [100%] | 33 passed in 0.65s",
+   "baseline_tail": "---------------- generated xml file: /tmp/tmpt_dow53e/floor.xml ---------------- | 33 passed in 1.31s",
    "claim": "In product mode the bus refuses unsigned, forged, stale, replayed and malformed-attachment messages.",
    "id": "product-mode-refuses",
    "mutant_red": 16,
    "mutated_rc": 1,
-   "mutated_tail": "FAILED test_bus_enforce.py::JointReviewPR4::test_M1_rejection_is_reported_on_stderr_also_for_peek | 16 failed, 17 passed in 0.78s",
+   "mutated_tail": "FAILED test_bus_enforce.py::JointReviewPR4::test_M1_rejection_is_reported_on_stderr_also_for_peek | 16 failed, 17 passed in 1.63s",
    "newly_red": [
     "test_bus_enforce.Check::test_m1_forged_and_key_mismatch_rejected",
     "test_bus_enforce.Check::test_m2_replay_within_window_and_after_restart",
@@ -314,12 +314,12 @@
   {
    "baseline_rc": 0,
    "baseline_red": 0,
-   "baseline_tail": "...................................                                      [100%] | 35 passed in 0.98s",
+   "baseline_tail": "---------------- generated xml file: /tmp/tmpmk32jri7/floor.xml ---------------- | 35 passed in 1.83s",
    "claim": "The notary log holds hashes and metadata only: never a message body, never sealed ciphertext.",
    "id": "log-holds-no-content",
    "mutant_red": 2,
    "mutated_rc": 1,
-   "mutated_tail": "FAILED test_bus_notary.py::NotaryIntegrationTest::test_ssh_exchange_one_entry_per_item_hash_only | 2 failed, 33 passed in 0.99s",
+   "mutated_tail": "FAILED test_bus_notary.py::NotaryIntegrationTest::test_ssh_exchange_one_entry_per_item_hash_only | 2 failed, 33 passed in 2.21s",
    "newly_red": [
     "test_bus_notary.NotaryChainTest::test_clean_chain_verifies_with_signed_checkpoints",
     "test_bus_notary.NotaryIntegrationTest::test_ssh_exchange_one_entry_per_item_hash_only"
@@ -339,12 +339,12 @@
   {
    "baseline_rc": 0,
    "baseline_red": 0,
-   "baseline_tail": ".............                                                            [100%] | 13 passed in 6.25s",
+   "baseline_tail": "---------------- generated xml file: /tmp/tmpij6kfwdl/floor.xml ---------------- | 13 passed in 10.57s",
    "claim": "A lock held by a process that is gone does not block the next owner.",
    "id": "dead-owner-lock",
    "mutant_red": 3,
    "mutated_rc": 1,
-   "mutated_tail": "FAILED test_bus_singleflight.py::OwnerNotLiveB1var2::test_live_panel_dead_owner_vs_live_panel_live_owner_never_double | 3 failed, 10 passed in 6.29s",
+   "mutated_tail": "FAILED test_bus_singleflight.py::OwnerNotLiveB1var2::test_live_panel_dead_owner_vs_live_panel_live_owner_never_double | 3 failed, 10 passed in 15.04s",
    "newly_red": [
     "test_bus_singleflight.OwnerNotLiveB1var2::test_dead_owner_is_refused_and_writes_nothing",
     "test_bus_singleflight.OwnerNotLiveB1var2::test_dead_owner_vs_live_owner_never_double",

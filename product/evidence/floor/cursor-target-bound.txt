@@ -2,6 +2,6 @@ claim: A logged cursor target beyond max(previous cursor, acknowledged id) is re
 tests: test_peer_reconcile_cursor_target.py
 peer_written: True
 mutation: {"file": "bus_notary.py", "find": "            if to > max(frm, up):", "replace": "            if False and to > max(frm, up):  # MUTATION: the cursor target is accepted uncritically"}
-baseline rc=0 .....                                                                    [100%] | 5 passed in 0.18s
-mutated  rc=1 FAILED test_peer_reconcile_cursor_target.py::CursorTargetUnbound::test_cursor_target_beyond_acked_is_reported | 1 failed, 4 passed in 0.19s
+baseline rc=0 ---------------- generated xml file: /tmp/tmp3u_d6o_p/floor.xml ---------------- | 5 passed in 0.47s
+mutated  rc=1 FAILED test_peer_reconcile_cursor_target.py::CursorTargetUnbound::test_cursor_target_beyond_acked_is_reported | 1 failed, 4 passed in 0.46s
 status: OK (green with the guard; 1 test(s) decided against it without it)

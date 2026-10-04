@@ -2,6 +2,6 @@ claim: In product mode the bus refuses unsigned, forged, stale, replayed and mal
 tests: test_bus_enforce.py
 peer_written: False
 mutation: {"file": "bus_enforce.py", "find": "    auth = ab.verify_sender(msg, keys_dir=keys_dir)\n    if auth == \"unsigned\":\n        return False, \"unsigned-downgrade\"", "replace": "    auth = ab.verify_sender(msg, keys_dir=keys_dir)\n    return True, \"ok\"  # MUTATION: the product gate accepts everything"}
-baseline rc=0 .................................                                        [100%] | 33 passed in 0.65s
-mutated  rc=1 FAILED test_bus_enforce.py::JointReviewPR4::test_M1_rejection_is_reported_on_stderr_also_for_peek | 16 failed, 17 passed in 0.78s
+baseline rc=0 ---------------- generated xml file: /tmp/tmpt_dow53e/floor.xml ---------------- | 33 passed in 1.31s
+mutated  rc=1 FAILED test_bus_enforce.py::JointReviewPR4::test_M1_rejection_is_reported_on_stderr_also_for_peek | 16 failed, 17 passed in 1.63s
 status: OK (green with the guard; 16 test(s) decided against it without it)
